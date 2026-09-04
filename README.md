@@ -42,12 +42,12 @@ DB_PATH=supermarket.db
 SHOP_NAME=Nebula SuperMart
 SHOP_ADDRESS=123 Main Street, Chennai, TN - 600001
 SHOP_GSTIN=33AABCU9603R1ZM
-REQUIRE_AUTH=true
+REQUIRE_AUTH=false
 ```
 
-> 🔐 **Authentication Guidance for Reviewers:**
-> * **`REQUIRE_AUTH=true` (Default):** Mobile contact verification is active. When a user opens the bot, they tap the `📱 Click to Verify Mobile Number` button to authenticate. Use `/logout` to test de-authentication.
-> * **`REQUIRE_AUTH=false` (Reviewer Bypass):** If evaluating from a desktop Telegram client that doesn't support contact sharing buttons, set `REQUIRE_AUTH=false` in `.env` to bypass verification during testing.
+> 🔐 **Authentication Guidance:**
+> * **`REQUIRE_AUTH=false` (Default for Reviewers):** Allows instant, friction-free testing of all 22 AI tools across any Telegram client without mobile contact sharing prompts.
+> * **`REQUIRE_AUTH=true` (Production Mode):** Enforces 1-click Telegram mobile contact verification (`📱 Click to Verify Mobile Number`) & `/logout` session management.
 
 ### 3. Initialize Database & Run Tests
 ```bash
