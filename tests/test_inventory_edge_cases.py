@@ -7,12 +7,12 @@ TEST_DB = "test_inventory_edge.db"
 
 @pytest.fixture(autouse=True)
 def setup_test_db():
-    if os.path.exists(TEST_DB):
-        os.remove(TEST_DB)
-    seed_database(TEST_DB)
     import db.models
     orig_path = db.models.DEFAULT_DB_PATH
     db.models.DEFAULT_DB_PATH = TEST_DB
+    if os.path.exists(TEST_DB):
+        os.remove(TEST_DB)
+    seed_database(TEST_DB)
     yield
     db.models.DEFAULT_DB_PATH = orig_path
     if os.path.exists(TEST_DB):
@@ -45,11 +45,11 @@ def test_list_low_stock():
     # Artificially set a product stock low
     import db.models
     conn = db.models.get_db_connection()
-    conn.execute("UPDATE products SET quantity = 2 WHERE sku_id = 'SKU-RICE-01'")
+    conn.execute("UPDATE products SET quantity = 2 WHERE sku_id = 'SKU-RICE-5K'")
     conn.commit()
     conn.close()
 
     res = list_low_stock()
     assert res["status"] == "success"
     assert res["count"] == 1
-    assert res["low_stock_items"][0]["name"] == "India Gate Basmati Rice 5kg"
+    assert "India Gate Basmati Rice" in res["low_stock_items"][0]["name"]

@@ -14,12 +14,12 @@ TEST_DB = "test_billing_edge.db"
 
 @pytest.fixture(autouse=True)
 def setup_test_db():
-    if os.path.exists(TEST_DB):
-        os.remove(TEST_DB)
-    seed_database(TEST_DB)
     import db.models
     orig_path = db.models.DEFAULT_DB_PATH
     db.models.DEFAULT_DB_PATH = TEST_DB
+    if os.path.exists(TEST_DB):
+        os.remove(TEST_DB)
+    seed_database(TEST_DB)
     yield
     db.models.DEFAULT_DB_PATH = orig_path
     if os.path.exists(TEST_DB):
@@ -46,7 +46,7 @@ def test_edit_and_remove_item_from_bill():
 
     prev2 = preview_bill(bill_id)
     assert len(prev2["items"]) == 1
-    assert prev2["items"][0]["product_name"] == "Refined White Sugar 1kg"
+    assert prev2["items"][0]["name"] == "Refined White Sugar 1kg"
 
 def test_finalize_bill_invalid_payment_mode():
     bill_res = start_bill("Walk-in")

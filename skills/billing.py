@@ -28,20 +28,18 @@ def start_bill(customer_name: Optional[str] = None) -> Dict[str, Any]:
     """Start a new draft bill. Optionally associate with a customer name."""
     conn = get_db_connection()
     try:
-        customer_id = None
-        if customer_name:
-            cur = conn.execute("SELECT customer_id FROM customers WHERE name LIKE ?", (f"%{customer_name.strip()}%",))
-            cust = cur.fetchone()
-            if cust:
-                customer_id = cust["customer_id"]
-            else:
-                # Create customer if doesn't exist
-                cur = conn.execute("INSERT INTO customers (name) VALUES (?)", (customer_name.strip(),))
-                customer_id = cur.lastrowid
-                conn.commit()
-                
         bill_id = f"BILL-{uuid.uuid4().hex[:8].upper()}"
+        customer_id = None
         with immediate_transaction(conn):
+            if customer_name:
+                cur = conn.execute("SELECT customer_id FROM customers WHERE name LIKE ?", (f"%{customer_name.strip()}%",))
+                cust = cur.fetchone()
+                if cust:
+                    customer_id = cust["customer_id"]
+                else:
+                    cur = conn.execute("INSERT INTO customers (name) VALUES (?)", (customer_name.strip(),))
+                    customer_id = cur.lastrowid
+
             conn.execute("""
                 INSERT INTO bills (bill_id, status, customer_id, subtotal, cgst, sgst, total)
                 VALUES (?, 'draft', ?, 0.0, 0.0, 0.0, 0.0)

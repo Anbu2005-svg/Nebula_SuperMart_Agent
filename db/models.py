@@ -9,7 +9,7 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     """Returns a sqlite3 Connection with WAL mode enabled and Row factory configured."""
     if db_path is None:
         db_path = os.getenv("DB_PATH", DEFAULT_DB_PATH)
-    conn = sqlite3.connect(db_path, timeout=10.0)
+    conn = sqlite3.connect(db_path, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
