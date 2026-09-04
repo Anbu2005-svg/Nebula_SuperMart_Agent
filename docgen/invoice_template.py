@@ -82,7 +82,7 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
     story = []
 
     # Shop Header
-    shop_name = os.getenv("SHOP_NAME", "Anbu SuperMart")
+    shop_name = os.getenv("SHOP_NAME", "Nebula SuperMart")
     shop_address = os.getenv("SHOP_ADDRESS", "123 Main Street, Chennai, TN - 600001")
     shop_gstin = os.getenv("SHOP_GSTIN", "33AABCU9603R1ZM")
 

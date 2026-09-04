@@ -1,156 +1,195 @@
-# Supermarket Ops Agent 🛒🤖
+# Nebula SuperMart AI Ops Agent 🛒🤖
 
-> **Nebula KnowLab Hiring Task**  
+> **Supermarket Operations AI Agent**  
 > An intelligent, autonomous Telegram AI Operations Agent for Indian Supermarkets built with **100% Free & Open-Source Tools**.
 
 ---
 
-## 📌 Telegram Bot Handle & Demo Quickstart
-- **Telegram Bot Handle:** `@YourBotHandle` (Run locally or deploy via polling)
-- **Repo Structure:** Clean modular python app (`skills/`, `agent/`, `db/`, `docgen/`, `tests/`)
+## 📌 Project Overview & GitHub Details
+* **GitHub Repository:** [https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent](https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent)
+* **Contributor / Author:** `Anbu2005-svg` (`anbanand44@gmail.com`)
+* **Core Stack:** Python 3.9+, Telegram Bot API (`python-telegram-bot`), Groq LLM API (`qwen/qwen3.8-27b`), SQLite3 (WAL Mode), ReportLab (PDF), python-pptx (PPTX), pytest.
 
-### Setup & Running Locally
+---
+
+## 🚀 Quickstart & Setup Guide
+
+### 1. Clone & Set Up Virtual Environment
 ```bash
-# 1. Clone repository & enter workspace
-cd "SuperMarket ops Agent"
+# Clone repository
+git clone https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent.git
+cd Nebula_SuperMart_Agent
 
-# 2. Activate virtual environment
-.\venv\Scripts\activate   # Windows
+# Create and activate virtual environment
+python -m venv venv
+.\venv\Scripts\activate   # Windows (or source venv/bin/activate on Linux/macOS)
 
-# 3. Copy .env.example and configure keys
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env` and fill in your API tokens:
+```bash
 cp .env.example .env
-# Set TELEGRAM_BOT_TOKEN and GROQ_API_KEY in .env
+```
+Ensure your `.env` contains:
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=qwen/qwen3.8-27b
+DB_PATH=supermarket.db
+SHOP_NAME=Nebula SuperMart
+SHOP_ADDRESS=123 Main Street, Chennai, TN - 600001
+SHOP_GSTIN=33AABCU9603R1ZM
+REQUIRE_AUTH=false
+```
 
-# 4. Seed database with Indian supermarket catalog
+### 3. Initialize Database & Run Tests
+```bash
+# Seed SQLite database with the 10 initial supermarket products & sample customers
 python -m db.seed
 
-# 5. Run tests
+# Run the complete 24-test automated test suite
 pytest tests/ -v
+```
 
-# 6. Launch Telegram Bot
+### 4. Launch Telegram Bot
+```bash
 python bot.py
 ```
 
 ---
 
-## 🏗️ Technical Architecture & Tech Stack
+## 📱 Telegram Bot Commands & Interactive Menu
 
-| Layer | Technology Choice | Rationale |
-|---|---|---|
-| **LLM & Agent Engine** | **Groq API** (`llama-3.3-70b-versatile`) | **100% Free** (No credit card required), ultra-low latency inference, standard OpenAI-compatible function calling. |
-| **Bot Interface** | **python-telegram-bot** (v21+, Async) | Mature Python Telegram framework supporting polling & webhooks. |
-| **Database & Concurrency** | **SQLite** (`sqlite3` with WAL mode) | Zero external dependencies, single file durability, `BEGIN IMMEDIATE` write-lock transactions for concurrency safety. |
-| **PDF Tax Invoices** | **ReportLab** | Pure Python PDF layout engine, generating branded PDF invoices with GST breakdowns. |
-| **PowerPoint Analytics** | **python-pptx** + **matplotlib** | Generates real PowerPoint `.pptx` decks with embedded charts. |
+The bot automatically registers an interactive command menu with Telegram using `set_my_commands`:
+
+| Command | Description |
+|---|---|
+| `/start` | Start bot session & verify mobile contact |
+| `/new` | Reset conversation context (standing preferences persist) |
+| `/invoice <bill_id>` | Download official PDF GST Tax Invoice for a bill |
+| `/analysis <period>` | Download PowerPoint (.pptx) operations & sales analysis deck |
+| `/help` | Display interactive command menu and usage guide |
+| `/logout` | De-authenticate current user session |
 
 ---
 
-## ⚙️ Control Loop Architecture
+## 📦 Initial 10-Product Inventory Dataset
+
+The database seed script (`db/seed.py`) pre-populates the catalog with the exact initial dataset specified in the project problem statement:
+
+| # | Product Name | Category | Stock | Unit | MRP | GST |
+|---|---|---|---|---|---|---|
+| 1 | Brooke Bond Red Label Tea 250g | Beverages | 15 | packet | ₹140 | 5% |
+| 2 | Amul Pasteurised Butter 500g | Dairy | 20 | packet | ₹275 | 12% |
+| 3 | Amul Taaza Toned Milk 1L | Dairy | 25 | packet | ₹56 | 0% |
+| 4 | Fortune Sunlite Sunflower Oil 1L | Edible Oils | 40 | litre | ₹155 | 5% |
+| 5 | Aashirvaad Whole Wheat Atta 10kg | Grains & Flour | 30 | packet | ₹440 | 5% |
+| 6 | India Gate Basmati Rice Feast Rozzana 5kg | Grains & Flour | 12 | packet | ₹475 | 5% |
+| 7 | Refined White Sugar 1kg | Pantry Basics | 60 | kg | ₹48 | 5% |
+| 8 | Tata Iodized Salt 1kg | Pantry Basics | 50 | packet | ₹28 | 0% |
+| 9 | Dettol Original Bathing Soap 125g | Personal Care | 40 | piece | ₹48 | 18% |
+| 10 | Maggi 2-Minute Instant Noodles 70g | Snacks & Packaged Food | 100 | packet | ₹14 | 18% |
+
+> 💡 **Clean Inventory Formatting:** When asked for stock, the agent presents items in structured, category-grouped cards with emojis, prices, and stock badges instead of raw database tables.
+
+---
+
+## 🏗️ Technical Architecture & Tech Stack
 
 ```
-Telegram Message Arrives (update_id)
+Telegram User Input (update_id)
         │
         ▼
- Check idempotency_log (Skip if update_id already processed)
+ Check Idempotency Log (Skip if update_id already processed)
         │
         ▼
- Load Owner Preferences from DB → Inject into System Prompt
+ Load Owner Standing Preferences → Inject into Agent System Context
         │
         ▼
- Groq Agent Multi-Step Tool Call Loop
+ Groq Agent Multi-Tool Control Loop (qwen/qwen3.8-27b)
  ┌─────────────────────────────────────────────────────────────┐
- │ 1. Send conversation history + tool definitions to Groq      │
- │ 2. Model decides to call Tool A (e.g. get_stock)            │
- │ 3. Code executes tool function locally                       │
- │ 4. Append tool result JSON to messages context              │
- │ 5. Repeat until model outputs final text response            │
+ │ 1. Send conversation history + tool schemas to Groq LLM      │
+ │ 2. Model decides tool execution (e.g. add_item_to_bill)    │
+ │ 3. Python code executes tool function against SQLite DB     │
+ │ 4. Append tool result JSON back to LLM context             │
+ │ 5. Repeat until model completes response text               │
  └─────────────────────────────────────────────────────────────┘
         │
         ▼
- Deliver Final Response & Attach PDF/PPTX Artifacts to Telegram
-        │
-        ▼
- Record update_id in idempotency_log
+ Deliver Response Text & PDF / PPTX Files to Telegram User
 ```
 
 ---
 
-## 🛠️ Skills & Tools Organization
+## 🛠️ Modular Skills & Tools Structure
 
-Tools are modularized cleanly inside `/skills`:
+Tools are organized cleanly inside `/skills`:
 
-- **Inventory (`skills/inventory.py`):**
-  - `get_stock(query)` — Stock level, MRP, GST slab.
-  - `receive_stock(sku_id, qty, cost_price, mrp)` — Stock replenishment.
-  - `add_product(...)` — New product catalog creation.
-  - `list_low_stock()` — Low inventory alerts.
-- **Billing (`skills/billing.py`):**
-  - `start_bill(customer_name)` — Create draft `bill_id`.
-  - `add_item_to_bill(bill_id, sku_or_name, qty)` — Soft stock check & add item.
-  - `remove_item_from_bill(bill_id, sku_or_name)` — Remove line item.
-  - `edit_item_qty(bill_id, sku_or_name, new_qty)` — Edit draft quantity.
-  - `preview_bill(bill_id)` — Preview tax & total.
-  - `finalize_bill(bill_id, payment_mode)` — Atomic stock decrement & sale commit.
-- **Credit / Khata (`skills/credit.py`):**
-  - `charge_khata(customer_name, amount, bill_id)` — Charge customer credit.
-  - `record_payment(customer_name, amount)` — Record credit repayment.
-  - `get_khata_balance(customer_name)` — Balance & history lookup.
-- **Analytics (`skills/analytics.py`):**
-  - `daily_summary(date_str)` — Sales, GST, payment mode breakdown.
-  - `close_day(date_str)` — Day-close summary.
-- **Document Generation (`skills/documents.py`):**
-  - `generate_invoice_pdf(bill_id)` — PDF tax invoice builder.
-  - `generate_analysis_deck(period)` — PowerPoint presentation builder.
-- **Preferences (`skills/preferences.py`):**
-  - `set_preference(key, value)` — Persist owner settings.
-  - `get_preference(key)` — Fetch standing owner settings.
+* **Inventory (`skills/inventory.py`):**
+  * `get_stock(query)` — Stock level, MRP, unit, GST slab lookup.
+  * `receive_stock(sku_id, qty, cost_price, mrp)` — Receive wholesale stock shipments.
+  * `add_product(name, category, unit, is_loose, cost_price, mrp, gst_slab, hsn_code, quantity, reorder_level)` — Add new SKUs to catalog.
+  * `list_low_stock()` — Low inventory alert list.
+  * `list_all_products(category)` — Catalog listing grouped by category.
+  * `search_products(query)` — Fuzzy product search.
 
----
+* **Multi-Item GST Billing (`skills/billing.py`):**
+  * `start_bill(customer_name)` — Create draft `bill_id`.
+  * `add_item_to_bill(bill_id, sku_or_name, qty)` — Add line item with stock check.
+  * `remove_item_from_bill(bill_id, sku_or_name)` — Remove line item.
+  * `edit_item_qty(bill_id, sku_or_name, new_qty)` — Update item quantity.
+  * `preview_bill(bill_id)` — Preview tax breakdown, subtotal, CGST, SGST, grand total.
+  * `finalize_bill(bill_id, payment_mode, payment_ref)` — Atomic stock decrement, payment recording & sale completion.
 
-## 💡 How the 9 "Hard Parts" Were Solved
+* **Khata Credit Ledger (`skills/credit.py`):**
+  * `charge_khata(customer_name, amount, bill_id)` — Charge credit balance.
+  * `record_payment(customer_name, amount)` — Record credit repayment.
+  * `get_khata_balance(customer_name)` — Balance & credit transaction history.
+  * `list_all_khata()` — List all customers with non-zero credit balance.
 
-### 1. Grounding & Zero Hallucination
-Tools are the **sole source of truth** for pricing, stock quantities, and customer balances. The system prompt instructs the agent never to guess prices or inventory levels; all queries route through `get_stock` or `preview_bill`.
+* **Analytics (`skills/analytics.py`):**
+  * `daily_summary(date_str)` — Total revenue, GST breakdown, payment mode split, top items.
+  * `close_day(date_str)` — Day closeout report.
 
-### 2. Oversell Guard Enforcement
-Enforced in Python code (`skills/billing.py`) inside `finalize_bill()` within an atomic transaction. If requested `qty > current_stock`, the tool raises an `OversellGuardError`. The LLM receives this error and relays a refusal message to the user.
+* **Document Generation (`skills/documents.py` & `docgen/`):**
+  * `generate_invoice_pdf(bill_id)` — Generates PDF GST Tax Invoice using ReportLab (`docgen/invoice_template.py`).
+  * `generate_analysis_deck(period)` — Generates PowerPoint presentation with embedded Matplotlib charts (`docgen/deck_builder.py`).
 
-### 3. GST Calculation Correctness
-Deterministic pure function `_calculate_gst()`:
-$$\text{GST Amount} = \text{Subtotal} \times \frac{\text{GST Slab}}{100}$$
-$$\text{CGST} = \text{SGST} = \frac{\text{GST Amount}}{2}$$
-Rounded per line to 2 decimal places. Verified in `tests/test_gst_calc.py`.
-
-### 4. Multi-turn Bills
-Bills are maintained in a `bills` table with `status='draft'`. Line items can be added, updated, or removed across multiple turns before the user calls `finalize_bill`.
-
-### 5. Idempotency & Retried Updates
-Every Telegram update carries a unique `update_id`. Before processing, `control_loop.py` checks `idempotency_log`. Retried updates return the previous result without double-billing or double-decrementing stock.
-
-### 6. Concurrency Safety
-SQLite write transactions wrap stock mutations using `BEGIN IMMEDIATE`. This acquires an immediate write lock on the database, serializing concurrent requests and preventing race conditions.
-
-### 7. Guardrails in Code
-Business rules (e.g. no selling below cost price, refusing credit repayments for non-existent customers) are enforced in tool code. Typed errors are returned as JSON to the LLM.
-
-### 8. Real PDF & PPTX Artifacts
-- **PDF Invoice:** Built via `reportlab` (`docgen/invoice_template.py`), featuring shop headers, itemized HSN/GST tables, and totals.
-- **PPTX Deck:** Built via `python-pptx` and `matplotlib` (`docgen/deck_builder.py`), creating visual slide decks with sales and category pie/bar charts.
-
-### 9. Persistent Memory Across Sessions
-Owner preferences (e.g. `default_payment_mode=UPI`, `shop_name=Anbu SuperMart`) are saved in the `preferences` table. They are injected into the agent's system context on every turn and persist even when `/new` clears session memory.
+* **Preferences (`skills/preferences.py`):**
+  * `set_preference(key, value)` / `get_preference(key)` — Store and retrieve owner standing preferences.
 
 ---
 
-## 🧪 Testing Suite
+## 💡 Resolution of the 9 Hard Requirements
 
-Run full automated tests:
+1. **Grounding & Zero Hallucinations:** Prices, stock levels, and customer balances come strictly from SQLite tool outputs.
+2. **Oversell Guard:** Enforced atomically in Python code; requests exceeding available stock trigger refusal messages.
+3. **Deterministic GST Math:** Pure function `_calculate_gst()` calculates intra-state CGST (50%) and SGST (50%) per line item.
+4. **Multi-Turn Bills:** Draft bills persist across turns until finalized.
+5. **Idempotency:** Unique `update_id` logging prevents duplicate billing on network retries.
+6. **Concurrency Safety:** `BEGIN IMMEDIATE` write locks serialize database writes cleanly under parallel load.
+7. **Code Guardrails:** Validation rules (e.g. `cost_price <= mrp`, GST slab in `[0, 5, 12, 18]`) enforced in tool code.
+8. **Real Document Artifacts:** Real PDF tax invoices and PPTX slides generated locally and delivered via Telegram.
+9. **Session Persistence:** Owner preferences persist in SQLite even across `/new` context resets.
+
+---
+
+## 🧪 Comprehensive 24-Suite Automated Testing
+
+Run the full automated test suite:
 ```bash
 pytest tests/ -v
 ```
 
-Tests include:
-- `tests/test_gst_calc.py` — GST slab math & rounding.
-- `tests/test_oversell.py` — Stock oversell guard & decrementing.
-- `tests/test_idempotency.py` — Duplicate Telegram update handling.
-- `tests/test_agent_flow.py` — End-to-end billing, PDF generation, Khata lifecycle, and PPTX decks.
+Our test suite includes **24 automated unit and integration tests**:
+* `tests/test_agent_flow.py` — End-to-end billing, PDF generation, Khata lifecycle, PPTX deck creation, preferences.
+* `tests/test_inventory_edge_cases.py` — Cost price vs MRP guards, invalid GST slabs, negative stock receipts, catalog search, low-stock threshold alerts.
+* `tests/test_billing_edge_cases.py` — Quantity editing, line item removal, invalid payment mode handling, non-existent bill errors.
+* `tests/test_analytics_and_concurrency.py` — Sales summary calculations, day closeout, and multi-threaded 5-cashier concurrent write locks.
+* `tests/test_gst_calc.py` — Tax calculation accuracy for 0%, 5%, 12%, and 18% slabs.
+* `tests/test_oversell.py` — Oversell guard refusal and stock quantity decrementing.
+* `tests/test_idempotency.py` — Telegram `update_id` idempotency protection.
+* `tests/test_auth.py` — Telegram mobile contact verification authentication lifecycle.
