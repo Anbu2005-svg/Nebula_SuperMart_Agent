@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -184,6 +184,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=f"Generated File: {os.path.basename(file_path)}"
                 )
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /help command — displays command menu and quick start guide."""
+    help_text = (
+        "🤖 *Supermarket Ops Agent — Available Commands*\n\n"
+        "• `/start` — Start bot session & verify mobile contact\n"
+        "• `/new` — Reset conversation context (standing preferences persist)\n"
+        "• `/invoice <bill_id>` — Download official PDF GST Tax Invoice\n"
+        "• `/analysis <period>` — Download PowerPoint (.pptx) operations sales deck\n"
+        "• `/help` — Show this interactive command guide\n"
+        "• `/logout` — De-authenticate user session\n\n"
+        "💬 *You can also ask anything in plain text:* e.g. \"Show stock\", \"Start a bill\", \"Charge khata ₹500 to Ravi\", \"Show today's sales summary\""
+    )
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
+async def post_init(application):
+    """Register interactive slash commands list with Telegram UI popup menu."""
+    commands = [
+        BotCommand("start", "Start bot & verify mobile contact"),
+        BotCommand("new", "Reset conversation history"),
+        BotCommand("invoice", "Download PDF GST Tax Invoice"),
+        BotCommand("analysis", "Download PowerPoint Sales Deck"),
+        BotCommand("help", "Show commands guide"),
+        BotCommand("logout", "De-authenticate user session")
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("Successfully pushed bot commands menu to Telegram API.")
+
 def main():
     """Main application entry point."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -195,7 +222,7 @@ def main():
     db_path = os.getenv("DB_PATH", "supermarket.db")
     seed_database(db_path)
 
-    app = ApplicationBuilder().token(token).build()
+    app = ApplicationBuilder().token(token).post_init(post_init).build()
 
     # Handlers
     app.add_handler(CommandHandler("start", start_command))
@@ -203,6 +230,7 @@ def main():
     app.add_handler(CommandHandler("new", new_command))
     app.add_handler(CommandHandler("invoice", invoice_command))
     app.add_handler(CommandHandler("analysis", analysis_command))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(MessageHandler(filters.CONTACT | (filters.TEXT & ~filters.COMMAND), handle_message))
 
     print(f"🤖 Supermarket Ops Agent Telegram Bot is running...")
