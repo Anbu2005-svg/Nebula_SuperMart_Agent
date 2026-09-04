@@ -3,7 +3,7 @@ import pytest
 from db.seed import seed_database
 from skills.billing import start_bill, add_item_to_bill, finalize_bill
 from skills.credit import charge_khata, record_payment, get_khata_balance, list_all_khata
-from skills.inventory import search_products, get_stock
+from skills.inventory import search_products
 from docgen.invoice_template import generate_pdf_invoice
 from docgen.deck_builder import generate_analysis_pptx
 from agent.harness import TOOL_DISPATCH, TOOLS_SCHEMA
