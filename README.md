@@ -7,7 +7,7 @@
 
 ## 📌 Project Overview & GitHub Details
 * **GitHub Repository:** [https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent](https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent)
-* **Contributor / Author:** `Anbu2005-svg` (`anbanand44@gmail.com`)
+* **Contributor / Author:** `Anbu2005-svg`
 * **Core Stack:** Python 3.9+, Telegram Bot API (`python-telegram-bot`), Groq LLM API (`qwen/qwen3.8-27b`), SQLite3 (WAL Mode), ReportLab (PDF), python-pptx (PPTX), pytest.
 
 ---
@@ -42,8 +42,12 @@ DB_PATH=supermarket.db
 SHOP_NAME=Nebula SuperMart
 SHOP_ADDRESS=123 Main Street, Chennai, TN - 600001
 SHOP_GSTIN=33AABCU9603R1ZM
-REQUIRE_AUTH=false
+REQUIRE_AUTH=true
 ```
+
+> 🔐 **Authentication Guidance for Reviewers:**
+> * **`REQUIRE_AUTH=true` (Default):** Mobile contact verification is active. When a user opens the bot, they tap the `📱 Click to Verify Mobile Number` button to authenticate. Use `/logout` to test de-authentication.
+> * **`REQUIRE_AUTH=false` (Reviewer Bypass):** If evaluating from a desktop Telegram client that doesn't support contact sharing buttons, set `REQUIRE_AUTH=false` in `.env` to bypass verification during testing.
 
 ### 3. Initialize Database & Run Tests
 ```bash
