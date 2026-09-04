@@ -177,15 +177,16 @@ Tools are organized cleanly inside `/skills`:
 
 ---
 
-## 🧪 Comprehensive 24-Suite Automated Testing
+## 🧪 Comprehensive 29-Suite Automated Testing
 
 Run the full automated test suite:
 ```bash
 pytest tests/ -v
 ```
 
-Our test suite includes **24 automated unit and integration tests**:
+Our test suite includes **29 automated unit and integration tests**:
 * `tests/test_agent_flow.py` — End-to-end billing, PDF generation, Khata lifecycle, PPTX deck creation, preferences.
+* `tests/test_docgen_and_harness.py` — PDF invoice non-empty content validation, PowerPoint slide layout verification, tool schema completeness, Khata repayment lifecycle, search fallback.
 * `tests/test_inventory_edge_cases.py` — Cost price vs MRP guards, invalid GST slabs, negative stock receipts, catalog search, low-stock threshold alerts.
 * `tests/test_billing_edge_cases.py` — Quantity editing, line item removal, invalid payment mode handling, non-existent bill errors.
 * `tests/test_analytics_and_concurrency.py` — Sales summary calculations, day closeout, and multi-threaded 5-cashier concurrent write locks.
