@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional
 from db.models import get_db_connection, immediate_transaction
+from skills.audit import _log_event
 
 def _get_customer_by_name(conn, name: str) -> Optional[Any]:
     cur = conn.execute("SELECT * FROM customers WHERE name LIKE ?", (f"%{name.strip()}%",))
@@ -35,7 +36,11 @@ def charge_khata(customer_name: str, amount: float, bill_id: Optional[str] = Non
             
             cur = conn.execute("SELECT khata_balance FROM customers WHERE customer_id = ?", (cid,))
             new_balance = cur.fetchone()["khata_balance"]
-            
+
+            _log_event(conn, "KHATA_CHARGED", "customer", customer["name"],
+                       details={"amount": amount, "bill_id": bill_id},
+                       old_value=customer["khata_balance"], new_value=new_balance)
+
         return {
             "status": "success",
             "message": f"Charged ₹{amount:.2f} to {customer['name']}'s khata. New balance: ₹{new_balance:.2f}",
@@ -76,7 +81,11 @@ def record_payment(customer_name: str, amount: float) -> Dict[str, Any]:
             
             cur = conn.execute("SELECT khata_balance FROM customers WHERE customer_id = ?", (cid,))
             new_balance = cur.fetchone()["khata_balance"]
-            
+
+            _log_event(conn, "KHATA_PAYMENT_RECORDED", "customer", customer["name"],
+                       details={"amount": amount},
+                       old_value=customer["khata_balance"], new_value=new_balance)
+
         return {
             "status": "success",
             "message": f"Recorded payment of ₹{amount:.2f} from {customer['name']}. Remaining khata balance: ₹{new_balance:.2f}",

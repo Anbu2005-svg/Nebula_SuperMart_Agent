@@ -33,6 +33,12 @@ def test_receive_stock_negative_qty():
     assert res["status"] == "error"
     assert "positive" in res["message"]
 
+
+def test_receive_stock_cost_cannot_exceed_mrp():
+    res = receive_stock("SKU-MAGGI-70", qty=5.0, cost_price=20.0, mrp=14.0)
+    assert res["status"] == "error"
+    assert "cannot exceed MRP" in res["message"]
+
 def test_search_products():
     res = search_products("Amul")
     assert res["status"] == "success"

@@ -7,8 +7,9 @@
 
 ## 📌 Project Overview & GitHub Details
 * **GitHub Repository:** [https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent](https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent)
+* **Telegram Bot:** [@Nebula_superMart_bot](https://t.me/Nebula_superMart_bot)
 * **Contributor / Author:** `Anbu2005-svg`
-* **Core Stack:** Python 3.9+, Telegram Bot API (`python-telegram-bot`), Groq LLM API (`qwen/qwen3.8-27b`), SQLite3 (WAL Mode), ReportLab (PDF), python-pptx (PPTX), pytest.
+* **Core Stack:** Python 3.9+, Telegram Bot API (`python-telegram-bot`), Ollama Cloud OpenAI-compatible API (`nemotron-3-super`), SQLite3 (WAL Mode), ReportLab (PDF), python-pptx (PPTX), pytest.
 
 ---
 
@@ -36,8 +37,9 @@ cp .env.example .env
 Ensure your `.env` contains:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=qwen/qwen3.8-27b
+LLM_BASE_URL=https://ollama.com/v1
+LLM_MODEL=nemotron-3-super
+LLM_API_KEY_1=your_ollama_api_key_here
 DB_PATH=supermarket.db
 SHOP_NAME=Nebula SuperMart
 SHOP_ADDRESS=123 Main Street, Chennai, TN - 600001
@@ -46,7 +48,7 @@ REQUIRE_AUTH=false
 ```
 
 > 🔐 **Authentication Guidance:**
-> * **`REQUIRE_AUTH=false` (Default for Reviewers):** Allows instant, friction-free testing of all 22 AI tools across any Telegram client without mobile contact sharing prompts.
+> * **`REQUIRE_AUTH=false` (Default for Reviewers):** Allows instant, friction-free testing of all 23 AI tools across any Telegram client without mobile contact sharing prompts.
 > * **`REQUIRE_AUTH=true` (Production Mode):** Enforces 1-click Telegram mobile contact verification (`📱 Click to Verify Mobile Number`) & `/logout` session management.
 
 ### 3. Initialize Database & Run Tests
@@ -54,7 +56,7 @@ REQUIRE_AUTH=false
 # Seed SQLite database with the 10 initial supermarket products & sample customers
 python -m db.seed
 
-# Run the complete 24-test automated test suite
+# Run the complete 34-test automated test suite
 pytest tests/ -v
 ```
 
@@ -103,6 +105,8 @@ The database seed script (`db/seed.py`) pre-populates the catalog with the exact
 
 ## 🏗️ Technical Architecture & Tech Stack
 
+**Harness:** An OpenAI-compatible function-calling control loop backed by Ollama Cloud. It keeps the model responsible for intent interpretation and multi-step tool orchestration, while SQLite-backed skills own transactional business rules such as GST, stock, khata, and idempotency.
+
 ```
 Telegram User Input (update_id)
         │
@@ -113,9 +117,9 @@ Telegram User Input (update_id)
  Load Owner Standing Preferences → Inject into Agent System Context
         │
         ▼
- Groq Agent Multi-Tool Control Loop (qwen/qwen3.8-27b)
+ Ollama Cloud Agent Multi-Tool Control Loop (nemotron-3-super)
  ┌─────────────────────────────────────────────────────────────┐
- │ 1. Send conversation history + tool schemas to Groq LLM      │
+ │ 1. Send conversation history + tool schemas to Ollama Cloud  │
  │ 2. Model decides tool execution (e.g. add_item_to_bill)    │
  │ 3. Python code executes tool function against SQLite DB     │
  │ 4. Append tool result JSON back to LLM context             │
@@ -165,6 +169,9 @@ Tools are organized cleanly inside `/skills`:
 * **Preferences (`skills/preferences.py`):**
   * `set_preference(key, value)` / `get_preference(key)` — Store and retrieve owner standing preferences.
 
+* **Audit Trail (`skills/audit.py`):**
+  * `get_audit_trail(query, event_type, limit)` — Query the audit trail of past store operations (stock changes, bills, khata, preferences) to answer questions like "Why did Maggi stock decrease today?".
+
 ---
 
 ## 💡 Resolution of the 9 Hard Requirements
@@ -179,16 +186,18 @@ Tools are organized cleanly inside `/skills`:
 8. **Real Document Artifacts:** Real PDF tax invoices and PPTX slides generated locally and delivered via Telegram.
 9. **Session Persistence:** Owner preferences persist in SQLite even across `/new` context resets.
 
+Additionally, every successful business mutation (bills, stock, khata, preferences) is recorded in an `audit_log` table with before/after values inside the same database transaction, exposing a full audit trail via the `get_audit_trail` agent tool.
+
 ---
 
-## 🧪 Comprehensive 29-Suite Automated Testing
+## 🧪 Comprehensive 34-Suite Automated Testing
 
 Run the full automated test suite:
 ```bash
 pytest tests/ -v
 ```
 
-Our test suite includes **29 automated unit and integration tests**:
+Our test suite includes **34 automated unit and integration tests**:
 * `tests/test_agent_flow.py` — End-to-end billing, PDF generation, Khata lifecycle, PPTX deck creation, preferences.
 * `tests/test_docgen_and_harness.py` — PDF invoice non-empty content validation, PowerPoint slide layout verification, tool schema completeness, Khata repayment lifecycle, search fallback.
 * `tests/test_inventory_edge_cases.py` — Cost price vs MRP guards, invalid GST slabs, negative stock receipts, catalog search, low-stock threshold alerts.
@@ -198,3 +207,4 @@ Our test suite includes **29 automated unit and integration tests**:
 * `tests/test_oversell.py` — Oversell guard refusal and stock quantity decrementing.
 * `tests/test_idempotency.py` — Telegram `update_id` idempotency protection.
 * `tests/test_auth.py` — Telegram mobile contact verification authentication lifecycle.
+* `tests/test_audit_trail.py` — Audit event lifecycle logging, oversell rejection non-logging, stock/product/khata events, and audit trail query filtering.

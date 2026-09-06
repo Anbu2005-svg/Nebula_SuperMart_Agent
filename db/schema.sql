@@ -75,3 +75,16 @@ CREATE TABLE IF NOT EXISTS authenticated_users (
     phone_number TEXT NULL,
     authenticated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    details TEXT,                    -- JSON string
+    old_value REAL,
+    new_value REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_event ON audit_log(event_type);

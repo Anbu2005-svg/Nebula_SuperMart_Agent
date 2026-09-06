@@ -2,6 +2,7 @@ import uuid
 import sqlite3
 from typing import Dict, Any, List, Optional
 from db.models import get_db_connection, immediate_transaction
+from skills.audit import _log_event
 
 def _calculate_gst(line_subtotal: float, gst_slab: float) -> Dict[str, float]:
     """
@@ -44,6 +45,9 @@ def start_bill(customer_name: Optional[str] = None) -> Dict[str, Any]:
                 INSERT INTO bills (bill_id, status, customer_id, subtotal, cgst, sgst, total)
                 VALUES (?, 'draft', ?, 0.0, 0.0, 0.0, 0.0)
             """, (bill_id, customer_id))
+
+            _log_event(conn, "BILL_CREATED", "bill", bill_id,
+                       details={"customer_name": customer_name})
             
         return {
             "status": "success",
@@ -127,6 +131,11 @@ def add_item_to_bill(bill_id: str, sku_or_name: str, qty: float) -> Dict[str, An
                     INSERT INTO bill_items (bill_id, sku_id, qty, unit_price, gst_slab, line_total)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (bill_id.strip(), product["sku_id"], qty, unit_price, product["gst_slab"], gst_info["line_total"]))
+
+            effective_qty = new_qty if existing else qty
+            _log_event(conn, "ITEM_ADDED", "bill", bill_id,
+                       details={"product_name": product["name"], "sku_id": product["sku_id"],
+                                "qty": effective_qty, "unit_price": unit_price})
                 
         return {
             "status": "success",
@@ -155,6 +164,8 @@ def remove_item_from_bill(bill_id: str, sku_or_name: str) -> Dict[str, Any]:
             
         with immediate_transaction(conn):
             conn.execute("DELETE FROM bill_items WHERE bill_id = ? AND sku_id = ?", (bill_id.strip(), product["sku_id"]))
+            _log_event(conn, "ITEM_REMOVED", "bill", bill_id,
+                       details={"product_name": product["name"], "sku_id": product["sku_id"]})
             
         return {
             "status": "success",
@@ -191,11 +202,21 @@ def edit_item_qty(bill_id: str, sku_or_name: str, new_qty: float) -> Dict[str, A
         gst_info = _calculate_gst(new_subtotal, product["gst_slab"])
         
         with immediate_transaction(conn):
+            cur = conn.execute("SELECT qty FROM bill_items WHERE bill_id = ? AND sku_id = ?",
+                               (bill_id.strip(), product["sku_id"]))
+            existing = cur.fetchone()
+            if not existing:
+                return {"status": "error", "message": f"Item '{product['name']}' not found in bill {bill_id}."}
+
             conn.execute("""
                 UPDATE bill_items
                 SET qty = ?, line_total = ?
                 WHERE bill_id = ? AND sku_id = ?
             """, (new_qty, gst_info["line_total"], bill_id.strip(), product["sku_id"]))
+
+            _log_event(conn, "ITEM_QTY_UPDATED", "bill", bill_id,
+                       details={"product_name": product["name"], "sku_id": product["sku_id"]},
+                       old_value=existing["qty"], new_value=new_qty)
             
         return {
             "status": "success",
@@ -244,6 +265,7 @@ def preview_bill(bill_id: str) -> Dict[str, Any]:
             item_previews.append({
                 "sku_id": item["sku_id"],
                 "name": item["product_name"],
+                "hsn_code": item["hsn_code"],
                 "unit": item["unit"],
                 "qty": item["qty"],
                 "unit_price": item["unit_price"],
@@ -321,13 +343,14 @@ def finalize_bill(
             subtotal = 0.0
             cgst_total = 0.0
             sgst_total = 0.0
+            item_stock_before: Dict[str, Any] = {}
 
             for item in items:
                 cur = conn.execute("SELECT * FROM products WHERE sku_id = ?", (item["sku_id"],))
                 product = cur.fetchone()
                 if not product:
                     raise ValueError(f"Product SKU {item['sku_id']} missing during finalization.")
-                
+
                 # STRICT OVERSELL GUARD ENFORCEMENT
                 if product["quantity"] < item["qty"]:
                     return {
@@ -335,6 +358,9 @@ def finalize_bill(
                         "error_type": "OversellGuardError",
                         "message": f"Oversell Guard Triggered: Cannot sell {item['qty']} units of '{product['name']}'. Current stock is only {product['quantity']}."
                     }
+
+                # Stash pre-decrement state for audit trail
+                item_stock_before[item["sku_id"]] = {"qty": product["quantity"], "name": product["name"]}
 
                 # Calculate Tax
                 line_subtotal = item["qty"] * item["unit_price"]
@@ -366,18 +392,29 @@ def finalize_bill(
                     WHERE sku_id = ?
                 """, (item["qty"], item["sku_id"]))
 
+                before = item_stock_before[item["sku_id"]]
+                _log_event(conn, "STOCK_DECREMENTED", "product", item["sku_id"],
+                           details={"product_name": before["name"], "bill_id": bill_id.strip(),
+                                    "qty_sold": item["qty"]},
+                           old_value=before["qty"], new_value=before["qty"] - item["qty"])
+
             # 5. Record Khata Transaction if applicable
             if payment_mode == "khata":
                 conn.execute("""
                     INSERT INTO khata_transactions (customer_id, type, amount, bill_id)
                     VALUES (?, 'charge', ?, ?)
                 """, (bill["customer_id"], grand_total, bill_id.strip()))
-                
+
                 conn.execute("""
                     UPDATE customers
                     SET khata_balance = khata_balance + ?
                     WHERE customer_id = ?
                 """, (grand_total, bill["customer_id"]))
+
+                _log_event(conn, "KHATA_CHARGED", "customer", cust["name"],
+                           details={"amount": grand_total, "bill_id": bill_id.strip()},
+                           old_value=cust["khata_balance"],
+                           new_value=cust["khata_balance"] + grand_total)
 
             # 6. Update Bill Status to Finalized
             conn.execute("""
@@ -399,6 +436,15 @@ def finalize_bill(
                     INSERT OR IGNORE INTO idempotency_log (update_id)
                     VALUES (?)
                 """, (str(idempotency_key),))
+
+            customer_name = None
+            if bill["customer_id"]:
+                cur = conn.execute("SELECT name FROM customers WHERE customer_id = ?", (bill["customer_id"],))
+                cust_row = cur.fetchone()
+                customer_name = cust_row["name"] if cust_row else None
+            _log_event(conn, "BILL_FINALIZED", "bill", bill_id,
+                       details={"payment_mode": payment_mode, "grand_total": grand_total,
+                                "customer_name": customer_name})
 
         # Return finalized bill summary
         final_preview = preview_bill(bill_id)

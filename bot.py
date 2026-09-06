@@ -171,8 +171,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_id=update_id
     )
 
-    # Send text response
-    await update.message.reply_text(reply_text)
+    # Send text response formatted with Markdown
+    try:
+        await update.message.reply_text(reply_text, parse_mode="Markdown")
+    except Exception:
+        # Fallback to plain text if message contains unescaped markdown characters
+        await update.message.reply_text(reply_text)
 
     # Send generated document files if any
     for file_path in generated_files:

@@ -37,14 +37,19 @@ def test_invoice_pdf_creation_and_size():
     assert os.path.exists(pdf_file)
     assert os.path.getsize(pdf_file) > 1000 # File has non-empty PDF content
 
+    from pypdf import PdfReader
+    invoice_text = "\n".join(page.extract_text() or "" for page in PdfReader(pdf_file).pages)
+    assert "HSN" in invoice_text
+    assert "1101" in invoice_text
+
 def test_pptx_deck_slides_creation():
     deck_file = generate_analysis_pptx("August 2026")
     assert os.path.exists(deck_file)
     assert os.path.getsize(deck_file) > 5000 # File has non-empty PPTX content
 
-def test_groq_tool_dispatch_completeness():
+def test_llm_tool_dispatch_completeness():
     schema_names = [t["function"]["name"] for t in TOOLS_SCHEMA]
-    assert len(schema_names) == 22
+    assert len(schema_names) == 23
     for name in schema_names:
         assert name in TOOL_DISPATCH
         assert callable(TOOL_DISPATCH[name])

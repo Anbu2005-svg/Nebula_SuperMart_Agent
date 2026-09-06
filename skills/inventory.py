@@ -1,6 +1,7 @@
 import uuid
 from typing import Dict, Any, List, Optional
 from db.models import get_db_connection, immediate_transaction
+from skills.audit import _log_event
 
 def get_stock(query: str) -> Dict[str, Any]:
     """Get stock information for a product by SKU ID or product name search."""
@@ -66,13 +67,24 @@ def receive_stock(sku_id: str, qty: float, cost_price: float, mrp: Optional[floa
             new_qty = product["quantity"] + qty
             new_cost = cost_price
             new_mrp = mrp if mrp is not None else product["mrp"]
+
+            if new_cost > new_mrp:
+                return {
+                    "status": "error",
+                    "message": f"Cost price ({new_cost}) cannot exceed MRP ({new_mrp})"
+                }
             
             conn.execute("""
-                UPDATE products 
+                UPDATE products
                 SET quantity = ?, cost_price = ?, mrp = ?
                 WHERE sku_id = ?
             """, (new_qty, new_cost, new_mrp, real_sku))
-            
+
+            _log_event(conn, "STOCK_RECEIVED", "product", real_sku,
+                       details={"product_name": product["name"], "qty_received": qty,
+                                "cost_price": new_cost, "mrp": new_mrp},
+                       old_value=product["quantity"], new_value=new_qty)
+
             return {
                 "status": "success",
                 "message": f"Received {qty} {product['unit']} of {product['name']}. New quantity: {new_qty}",
@@ -114,7 +126,11 @@ def add_product(
                 INSERT INTO products (sku_id, name, category, unit, is_loose, cost_price, mrp, gst_slab, hsn_code, quantity, reorder_level)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (generated_sku, name.strip(), category.strip(), unit.strip(), is_loose, cost_price, mrp, gst_slab, hsn_code.strip(), quantity, reorder_level))
-            
+
+            _log_event(conn, "PRODUCT_ADDED", "product", generated_sku,
+                       details={"name": name, "category": category, "mrp": mrp, "gst_slab": gst_slab},
+                       old_value=0, new_value=quantity)
+
             return {
                 "status": "success",
                 "message": f"Product '{name}' added successfully with SKU: {generated_sku}",

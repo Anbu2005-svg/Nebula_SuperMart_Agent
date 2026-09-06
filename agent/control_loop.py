@@ -1,9 +1,10 @@
 import json
+import time
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from db.models import get_db_connection, immediate_transaction
 from skills.preferences import get_all_preferences
-from agent.harness import get_groq_client, SYSTEM_PROMPT, TOOLS_SCHEMA, TOOL_DISPATCH, MODEL_NAME
+from agent.harness import get_llm_client, failover_to_next_key, reset_key_rotation, SYSTEM_PROMPT, TOOLS_SCHEMA, TOOL_DISPATCH, MODEL_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,35 @@ CONVERSATION_HISTORY: Dict[int, List[Dict[str, Any]]] = {}
 def clear_conversation(chat_id: int):
     """Clear in-memory chat session history (used by /new command). Preferences persist in DB!"""
     CONVERSATION_HISTORY[chat_id] = []
+
+def _call_llm_with_failover(messages, tools, max_tokens=2500):
+    """
+    Call the LLM API with automatic failover to the backup API key on rate limit (429) errors.
+    Tries current key → on 429/rate limit → switches to next key → retries once.
+    """
+    max_attempts = 3  # key1 → key2 → key1 (with small delay)
+    for attempt in range(max_attempts):
+        client = get_llm_client()
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                max_tokens=max_tokens
+            )
+            return response
+        except Exception as e:
+            error_str = str(e)
+            # Check if it's a rate limit error (429) or token limit exceeded
+            is_rate_limit = "429" in error_str or "rate_limit" in error_str.lower() or "too many requests" in error_str.lower()
+            if is_rate_limit and attempt < max_attempts - 1:
+                logger.warning(f"Rate limit hit on attempt {attempt + 1}: {error_str[:100]}")
+                failover_to_next_key()
+                time.sleep(1)  # Brief pause before retrying with new key
+                continue
+            else:
+                raise  # Re-raise non-rate-limit errors or final attempt failures
 
 def run_agent_turn(
     user_message: str,
@@ -24,6 +54,9 @@ def run_agent_turn(
     Executes a multi-turn agent control loop for an incoming user message.
     Returns a tuple of: (final_reply_text, list_of_generated_file_paths)
     """
+    # Reset key rotation at start of each user turn
+    reset_key_rotation()
+
     # 1. Idempotency Check
     conn = get_db_connection()
     try:
@@ -56,7 +89,6 @@ def run_agent_turn(
     # Append user input
     messages.append({"role": "user", "content": user_message})
 
-    client = get_groq_client()
     generated_files: List[str] = []
     max_steps = 10
     step_count = 0
@@ -65,14 +97,9 @@ def run_agent_turn(
     while step_count < max_steps:
         step_count += 1
         try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                tools=TOOLS_SCHEMA,
-                tool_choice="auto"
-            )
+            response = _call_llm_with_failover(messages, TOOLS_SCHEMA)
         except Exception as e:
-            logger.error(f"Error calling Groq API: {e}")
+            logger.error(f"Error calling LLM API: {e}")
             return (f"Apologies, an error occurred while processing your request with the AI engine: {str(e)}", [])
 
         assistant_msg = response.choices[0].message

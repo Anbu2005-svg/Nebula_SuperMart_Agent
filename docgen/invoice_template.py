@@ -114,6 +114,7 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
     headers = [
         Paragraph("<b>S.No</b>", table_header_style),
         Paragraph("<b>Product Name</b>", table_header_style),
+        Paragraph("<b>HSN</b>", table_header_style),
         Paragraph("<b>Qty</b>", table_header_style),
         Paragraph("<b>Rate</b>", table_header_style),
         Paragraph("<b>GST%</b>", table_header_style),
@@ -127,6 +128,7 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
         table_rows.append([
             Paragraph(str(idx), cell_style),
             Paragraph(item['name'], cell_style),
+            Paragraph(item.get('hsn_code') or "-", cell_style),
             Paragraph(f"{item['qty']} {item['unit']}", cell_style),
             Paragraph(f"₹{item['unit_price']:.2f}", right_cell_style),
             Paragraph(f"{item['gst_slab']}%", right_cell_style),
@@ -135,7 +137,7 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
             Paragraph(f"₹{item['line_total']:.2f}", right_cell_style)
         ])
 
-    items_table = Table(table_rows, colWidths=[35, 175, 60, 55, 45, 55, 55, 60])
+    items_table = Table(table_rows, colWidths=[28, 155, 42, 52, 42, 38, 45, 45, 53])
     items_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2B6CB0')),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),

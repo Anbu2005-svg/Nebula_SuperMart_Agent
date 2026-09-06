@@ -1,19 +1,89 @@
 import os
 import json
+import logging
 from typing import Dict, Any, List, Callable
-from groq import Groq
+from openai import OpenAI
 
-from skills import inventory, billing, credit, analytics, documents, preferences
+from skills import inventory, billing, credit, analytics, documents, preferences, audit
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL_NAME = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+logger = logging.getLogger(__name__)
 
-def get_groq_client() -> Groq:
-    """Initialize Groq API client."""
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError("GROQ_API_KEY environment variable is missing!")
-    return Groq(api_key=api_key)
+# ── LLM Provider Configuration ──────────────────────────────────────
+# Uses Ollama Cloud's OpenAI-compatible API.
+# Two API keys are supported for automatic failover on rate limit (429) errors.
+def normalize_openai_base_url(base_url: str) -> str:
+    """Return an OpenAI-compatible base URL for the configured provider.
+
+    Ollama's native API lives at ``/api`` while its OpenAI-compatible API lives
+    at ``/v1``. The OpenAI SDK appends ``/chat/completions``, so passing an
+    Ollama native URL would otherwise request the invalid ``/api/chat/completions``.
+    """
+    normalized = base_url.strip().rstrip("/")
+    if normalized.endswith("/api"):
+        return f"{normalized[:-4]}/v1"
+    return normalized
+
+
+API_BASE_URL = normalize_openai_base_url(
+    os.getenv("LLM_BASE_URL", "https://ollama.com/v1")
+)
+MODEL_NAME = os.getenv("LLM_MODEL", "nemotron-3-super")
+
+# Dual API key pool for rate-limit failover
+def _load_api_keys() -> List[str]:
+    """Load API keys from environment. Called lazily to support test environments."""
+    keys: List[str] = []
+    for key_env in ["LLM_API_KEY_1", "LLM_API_KEY_2"]:
+        val = os.getenv(key_env, "").strip()
+        if val:
+            keys.append(val)
+    # Accept Ollama's provider-native environment variable as a fallback.
+    if not keys:
+        ollama_key = os.getenv("OLLAMA_API_KEY", "").strip()
+        if ollama_key:
+            keys.append(ollama_key)
+    return keys
+
+_API_KEYS: List[str] = _load_api_keys()
+
+if not _API_KEYS:
+    logger.warning("⚠️ No LLM API keys found at import time. Set LLM_API_KEY_1 in .env before running the bot.")
+
+# Track which key is currently active (index into _API_KEYS)
+_active_key_index = 0
+
+def _build_client(api_key: str) -> OpenAI:
+    """Build an OpenAI-compatible client pointing at the configured base URL."""
+    return OpenAI(api_key=api_key, base_url=API_BASE_URL)
+
+def get_llm_client() -> OpenAI:
+    """Get the currently active LLM client. Raises if no keys configured."""
+    global _API_KEYS
+    # Reload keys lazily in case dotenv was loaded after initial import
+    if not _API_KEYS:
+        _API_KEYS = _load_api_keys()
+    if not _API_KEYS:
+        raise ValueError("No LLM API keys configured! Set LLM_API_KEY_1 (and optionally LLM_API_KEY_2) in .env")
+    return _build_client(_API_KEYS[_active_key_index])
+
+def failover_to_next_key() -> bool:
+    """Switch to the next API key. Returns True if a new key is available, False if exhausted."""
+    global _active_key_index
+    next_idx = _active_key_index + 1
+    if next_idx < len(_API_KEYS):
+        _active_key_index = next_idx
+        logger.warning(f"⚡ Rate limit hit — failing over to API key #{next_idx + 1}")
+        return True
+    else:
+        # Wrap around back to key 1 (it may have recovered by now)
+        _active_key_index = 0
+        logger.warning("⚠️ All API keys exhausted — wrapping back to key #1")
+        return False
+
+def reset_key_rotation():
+    """Reset back to the first API key (call at start of each request cycle)."""
+    global _active_key_index
+    _active_key_index = 0
 
 # System Prompt grounding instructions
 SYSTEM_PROMPT = """
@@ -27,8 +97,9 @@ GROUNDING & INTEGRITY RULES:
 4. Billing Workflow: When asked to start or manage a bill, call `start_bill`, `add_item_to_bill`, `preview_bill`, or `finalize_bill` as appropriate.
 5. Customer Credit (Khata): Always check or record khata using tools. If a customer is not found, inform the user clearly instead of guessing.
 6. Owner Preferences: Respect standing preferences (e.g. default payment mode, default shop name) injected in the system context.
-7. Clear & Readable Formatting: When displaying inventory lists or product stock, present items in a clean, structured, human-readable format grouped by Category with category emojis, neat bullet points, price (MRP), unit, and GST rates rather than raw, hard-to-read database tables.
+7. Clear & Readable Formatting: Present items in a clean, structured format using emojis (e.g. 📊, 📌, 🔹) or clean bullet dots (`•`). NEVER output raw hyphens/dashes (`-`) or slashes (`/`) at the beginning of list items or bullet lines. Use `•` or emojis for ALL bullet points and lists without exception. Avoid raw Markdown headers (like #, ##, ###); use bold text (*text*) with emojis for section titles.
 8. Concise & Friendly: Be direct, helpful, polite, and use Indian currency formatting (₹).
+9. Audit Trail: To answer questions about past operations or stock changes (e.g. "why did Maggi stock drop?"), call get_audit_trail with the product or bill as the query filter.
 """
 
 # Tool Dispatch Map
@@ -54,7 +125,8 @@ TOOL_DISPATCH: Dict[str, Callable] = {
     "generate_invoice_pdf": documents.generate_invoice_pdf,
     "generate_analysis_deck": documents.generate_analysis_deck,
     "set_preference": preferences.set_preference,
-    "get_preference": preferences.get_preference
+    "get_preference": preferences.get_preference,
+    "get_audit_trail": audit.get_audit_trail
 }
 
 # OpenAI-compatible tool schemas
@@ -370,6 +442,21 @@ TOOLS_SCHEMA = [
                     "key": {"type": "string"}
                 },
                 "required": ["key"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_audit_trail",
+            "description": "Query the audit trail of past store operations (stock changes, bills, khata, preferences) to answer questions like 'why did Maggi stock decrease today?'. Optionally filter by entity (product/SKU/bill/customer) and/or event type.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional filter: product name, SKU, bill ID, or customer name"},
+                    "event_type": {"type": "string", "description": "Optional event type filter, e.g. STOCK_DECREMENTED"},
+                    "limit": {"type": "number", "description": "Max events to return (default 20)"}
+                }
             }
         }
     }
