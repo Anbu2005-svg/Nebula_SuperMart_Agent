@@ -31,12 +31,18 @@ MODEL_NAME = os.getenv("LLM_MODEL", "nemotron-3-super")
 
 # Dual API key pool for rate-limit failover
 def _load_api_keys() -> List[str]:
-    """Load API keys from environment. Called lazily to support test environments."""
+    """Load API keys from environment. Supports unlimited LLM_API_KEY_1, LLM_API_KEY_2, ... LLM_API_KEY_N.
+    Add more keys to .env to increase concurrent shop capacity."""
     keys: List[str] = []
-    for key_env in ["LLM_API_KEY_1", "LLM_API_KEY_2"]:
-        val = os.getenv(key_env, "").strip()
+    # Auto-discover any LLM_API_KEY_N (1, 2, 3, 4...) — no hardcoded limit
+    idx = 1
+    while True:
+        val = os.getenv(f"LLM_API_KEY_{idx}", "").strip()
         if val:
             keys.append(val)
+            idx += 1
+        else:
+            break
     # Accept Ollama's provider-native environment variable as a fallback.
     if not keys:
         ollama_key = os.getenv("OLLAMA_API_KEY", "").strip()
@@ -48,9 +54,13 @@ _API_KEYS: List[str] = _load_api_keys()
 
 if not _API_KEYS:
     logger.warning("⚠️ No LLM API keys found at import time. Set LLM_API_KEY_1 in .env before running the bot.")
+else:
+    logger.info(f"✅ Loaded {len(_API_KEYS)} API key(s) for LLM failover/load balancing.")
 
 # Track which key is currently active (index into _API_KEYS)
 _active_key_index = 0
+# Round-robin counter for distributing concurrent requests across keys
+_round_robin_index = 0
 
 def _build_client(api_key: str) -> OpenAI:
     """Build an OpenAI-compatible client pointing at the configured base URL."""
@@ -63,7 +73,7 @@ def get_llm_client() -> OpenAI:
     if not _API_KEYS:
         _API_KEYS = _load_api_keys()
     if not _API_KEYS:
-        raise ValueError("No LLM API keys configured! Set LLM_API_KEY_1 (and optionally LLM_API_KEY_2) in .env")
+        raise ValueError("No LLM API keys configured! Set LLM_API_KEY_1 (and optionally LLM_API_KEY_2, LLM_API_KEY_3...) in .env")
     return _build_client(_API_KEYS[_active_key_index])
 
 def failover_to_next_key() -> bool:
@@ -81,9 +91,16 @@ def failover_to_next_key() -> bool:
         return False
 
 def reset_key_rotation():
-    """Reset back to the first API key (call at start of each request cycle)."""
-    global _active_key_index
-    _active_key_index = 0
+    """
+    At the start of each new request, pick the next key in round-robin order.
+    This distributes load across ALL available keys when multiple shops are active simultaneously.
+    e.g. Shop A request → key 1, Shop B request → key 2, Shop C request → key 3, Shop D → key 1...
+    """
+    global _active_key_index, _round_robin_index
+    if _API_KEYS:
+        _round_robin_index = (_round_robin_index + 1) % len(_API_KEYS)
+        _active_key_index = _round_robin_index
+
 
 # System Prompt grounding instructions
 SYSTEM_PROMPT = """
