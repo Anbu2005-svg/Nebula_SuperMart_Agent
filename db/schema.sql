@@ -70,6 +70,22 @@ CREATE TABLE IF NOT EXISTS idempotency_log (
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS shops (
+    shop_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_name TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    shop_address TEXT NULL,
+    shop_gstin TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    telegram_id TEXT PRIMARY KEY,
+    shop_id INTEGER NOT NULL,
+    authenticated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(shop_id) REFERENCES shops(shop_id)
+);
+
 CREATE TABLE IF NOT EXISTS authenticated_users (
     telegram_id TEXT PRIMARY KEY,
     phone_number TEXT NULL,

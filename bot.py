@@ -17,18 +17,23 @@ from telegram.ext import (
 from db.seed import seed_database
 from agent.control_loop import run_agent_turn, clear_conversation
 from skills.documents import generate_invoice_pdf, generate_analysis_deck
-from skills.auth import is_user_authenticated, authenticate_user, deauthenticate_user
-
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from skills.auth import (
+    is_user_authenticated,
+    register_shop,
+    login_shop,
+    get_user_session,
+    logout_user_session
 )
-logger = logging.getLogger(__name__)
 
-def get_auth_keyboard():
-    """Returns simple 1-click Mobile Contact Verification keyboard button."""
-    keyboard = [[KeyboardButton(text="📱 Click to Verify Mobile Number", request_contact=True)]]
+# User login/signup state machine: {telegram_id: {"step": "choice"|"signup_name"|"signup_pwd"|"signup_meta"|"login_name"|"login_pwd", "data": {}}}
+USER_AUTH_STATE: Dict[str, Dict[str, Any]] = {}
+
+def get_auth_choice_keyboard():
+    """Returns New Shop (Sign Up) vs Existing Shop (Log In) inline choice keyboard buttons."""
+    keyboard = [
+        [KeyboardButton(text="🆕 New Shop (Sign Up)")],
+        [KeyboardButton(text="🔑 Existing Shop (Log In)")]
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -36,54 +41,56 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
     chat_id = update.effective_chat.id
     clear_conversation(chat_id)
+    USER_AUTH_STATE.pop(telegram_id, None)
     
-    if not is_user_authenticated(telegram_id):
+    session = get_user_session(telegram_id)
+    if not session:
         auth_msg = (
-            "🔐 *Supermarket Ops Agent — Simple Mobile Verification*\n\n"
-            "Welcome! To access store operations, please click the button below to verify your mobile contact."
+            "🏬 *Welcome to Supermarket Ops Agent!*\n\n"
+            "To get started, please select whether you want to register a **New Shop** or log into an **Existing Shop**."
         )
-        await update.message.reply_text(auth_msg, parse_mode="Markdown", reply_markup=get_auth_keyboard())
+        await update.message.reply_text(auth_msg, parse_mode="Markdown", reply_markup=get_auth_choice_keyboard())
         return
 
     welcome_text = (
-        "🛒 *Welcome to Supermarket Ops Agent!*\n\n"
-        "I am your AI operations assistant. You can talk to me naturally or use commands:\n\n"
-        "• *Inventory List:* \"Show all products in stock\", \"List low stock items\"\n"
-        "• *Receive Stock:* \"Add 50 packets of Maggi Noodles at ₹12 cost, ₹14 MRP, 18% GST\"\n"
-        "• *Billing:* \"Start a bill\", \"Add 2 Aashirvaad Atta and 1 Tata Salt\", \"Preview bill\", \"Finalize with UPI\"\n"
-        "• *Khata (Credit):* \"Charge ₹500 khata to Ravi\", \"What is Ravi's balance?\", \"Ravi paid ₹200\"\n"
-        "• *Daily Summary:* \"Show today's sales summary\"\n"
-        "• *Set Preferences:* \"Set default payment mode to UPI\"\n\n"
-        "⚡ *Commands:*\n"
+        f"🛒 *Welcome back to {session['shop_name']}!*\n\n"
+        f"📍 Address: {session['shop_address'] or 'Not specified'}\n"
+        f"📑 GSTIN: {session['shop_gstin'] or 'Not specified'}\n\n"
+        "You can manage your supermarket using natural language or slash commands:\n\n"
+        "• `/stock` — View all products & inventory stock\n"
+        "• `/lowstock` — View low stock reorder items\n"
+        "• `/bill` — Create a bill (e.g. `/bill 2 sugar, 4 Maggi, UPI`)\n"
+        "• `/khata` — View customer credit balances\n"
+        "• `/summary` — View today's sales & revenue summary\n"
         "• `/invoice <bill_id>` — Download PDF Tax Invoice\n"
-        "• `/analysis` — Download PowerPoint Analytics Deck\n"
-        "• `/new` — Reset conversation context (Preferences persist!)\n"
-        "• `/logout` — De-authenticate session"
+        "• `/analysis` — Download PowerPoint Sales Deck\n"
+        "• `/logout` — Log out of this shop session"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
 
 async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /logout command."""
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
-    deauthenticate_user(telegram_id)
-    await update.message.reply_text("🔒 Logged out successfully. Click verify to re-authenticate when needed.", reply_markup=ReplyKeyboardRemove())
+    logout_user_session(telegram_id)
+    USER_AUTH_STATE.pop(telegram_id, None)
+    await update.message.reply_text("🔒 Logged out successfully. Send /start anytime to log into another shop session.", reply_markup=ReplyKeyboardRemove())
 
 async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /new command — resets conversation memory while preserving database preferences."""
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
     if not is_user_authenticated(telegram_id):
-        await update.message.reply_text("🔐 Authentication required. Please tap the button below to verify.", parse_mode="Markdown", reply_markup=get_auth_keyboard())
+        await update.message.reply_text("🔐 Authentication required. Send /start to log into your shop.", parse_mode="Markdown")
         return
         
     chat_id = update.effective_chat.id
     clear_conversation(chat_id)
-    await update.message.reply_text("🔄 Conversation history cleared! Active draft bills and standing preferences remain saved in the database.")
+    await update.message.reply_text("🔄 Conversation history cleared! Active draft bills and inventory data remain saved in the database.")
 
 async def invoice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /invoice <bill_id> command."""
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
     if not is_user_authenticated(telegram_id):
-        await update.message.reply_text("🔐 Authentication required. Please tap the button below to verify.", parse_mode="Markdown", reply_markup=get_auth_keyboard())
+        await update.message.reply_text("🔐 Authentication required. Send /start to log into your shop.", parse_mode="Markdown")
         return
 
     if not context.args:
@@ -110,7 +117,7 @@ async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /analysis command."""
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
     if not is_user_authenticated(telegram_id):
-        await update.message.reply_text("🔐 Authentication required. Please tap the button below to verify.", parse_mode="Markdown", reply_markup=get_auth_keyboard())
+        await update.message.reply_text("🔐 Authentication required. Send /start to log into your shop.", parse_mode="Markdown")
         return
 
     period = " ".join(context.args) if context.args else "Today"
@@ -130,35 +137,100 @@ async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"❌ Failed to generate analysis deck: {res.get('message', 'Unknown error')}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle regular text messages and contact sharing."""
+    """Handle regular text messages and multi-step shop authentication state machine."""
     if not update.message:
         return
 
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
-
-    # Handle Simple 1-Click Mobile Contact Sharing Authentication
-    if update.message.contact:
-        phone = update.message.contact.phone_number
-        authenticate_user(telegram_id, phone_number=phone)
-        await update.message.reply_text(
-            f"✅ **Mobile Verified!** ({phone})\n\nAuthentication successful. Welcome to Supermarket Ops Agent! Ask any store operation query.",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return
-
-    user_text = update.message.text
+    user_text = (update.message.text or "").strip()
     if not user_text:
         return
 
-    # Check Simple Auth
-    if not is_user_authenticated(telegram_id):
-        auth_req = (
-            "🔐 *Verification Required*\n\n"
-            "To access Supermarket Ops Agent, please tap the button below to verify your mobile contact."
-        )
-        await update.message.reply_text(auth_req, parse_mode="Markdown", reply_markup=get_auth_keyboard())
-        return
+    # Check if user has an active shop session
+    session = get_user_session(telegram_id)
+    
+    # State machine for unauthenticated users (Login / Sign Up flow)
+    if not session:
+        state = USER_AUTH_STATE.get(telegram_id, {}).get("step")
+        
+        if not state or user_text in ["🆕 New Shop (Sign Up)", "🔑 Existing Shop (Log In)"]:
+            if user_text == "🆕 New Shop (Sign Up)":
+                USER_AUTH_STATE[telegram_id] = {"step": "signup_name", "data": {}}
+                await update.message.reply_text("📝 *New Shop Registration*\n\nPlease enter your **Shop Name** (Mandatory):", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+                return
+            elif user_text == "🔑 Existing Shop (Log In)":
+                USER_AUTH_STATE[telegram_id] = {"step": "login_name", "data": {}}
+                await update.message.reply_text("🔑 *Shop Login*\n\nPlease enter your **Shop Name**:", parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+                return
+            else:
+                await update.message.reply_text("🏬 Please select an option below:", parse_mode="Markdown", reply_markup=get_auth_choice_keyboard())
+                return
+
+        # Handle Registration Steps
+        if state == "signup_name":
+            USER_AUTH_STATE[telegram_id]["data"]["shop_name"] = user_text
+            USER_AUTH_STATE[telegram_id]["step"] = "signup_pwd"
+            await update.message.reply_text(f"🔐 Setting up **{user_text}**.\n\nPlease enter a **Password** for this shop (Mandatory):", parse_mode="Markdown")
+            return
+
+        elif state == "signup_pwd":
+            USER_AUTH_STATE[telegram_id]["data"]["password"] = user_text
+            USER_AUTH_STATE[telegram_id]["step"] = "signup_meta"
+            await update.message.reply_text(
+                "📍 *Optional Shop Details*\n\n"
+                "Enter **Shop Address & GSTIN** separated by comma (or reply `skip` to complete registration):\n"
+                "Example: `123 Main St Chennai, 33AABCU9603R1ZM`",
+                parse_mode="Markdown"
+            )
+            return
+
+        elif state == "signup_meta":
+            shop_name = USER_AUTH_STATE[telegram_id]["data"]["shop_name"]
+            password = USER_AUTH_STATE[telegram_id]["data"]["password"]
+            
+            shop_address = None
+            shop_gstin = None
+            if user_text.lower() != "skip":
+                parts = [p.strip() for p in user_text.split(",") if p.strip()]
+                if len(parts) >= 1:
+                    shop_address = parts[0]
+                if len(parts) >= 2:
+                    shop_gstin = parts[1]
+
+            reg_res = register_shop(shop_name=shop_name, password=password, shop_address=shop_address, shop_gstin=shop_gstin)
+            if reg_res.get("status") == "success":
+                login_res = login_shop(telegram_id=telegram_id, shop_name=shop_name, password=password)
+                USER_AUTH_STATE.pop(telegram_id, None)
+                await update.message.reply_text(
+                    f"🎉 **Registration Successful!**\n\nShop **{shop_name}** is now ready! Anyone in your shop can log in using Shop Name: `{shop_name}` & your Password.\n\nType `/stock` or ask any query to start!",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(f"❌ {reg_res.get('message')}\n\nPlease try again by clicking /start.")
+                USER_AUTH_STATE.pop(telegram_id, None)
+            return
+
+        # Handle Login Steps
+        elif state == "login_name":
+            USER_AUTH_STATE[telegram_id]["data"]["shop_name"] = user_text
+            USER_AUTH_STATE[telegram_id]["step"] = "login_pwd"
+            await update.message.reply_text(f"🔑 Enter Password for shop **{user_text}**:", parse_mode="Markdown")
+            return
+
+        elif state == "login_pwd":
+            shop_name = USER_AUTH_STATE[telegram_id]["data"]["shop_name"]
+            password = user_text
+            login_res = login_shop(telegram_id=telegram_id, shop_name=shop_name, password=password)
+            USER_AUTH_STATE.pop(telegram_id, None)
+            
+            if login_res.get("status") == "success":
+                await update.message.reply_text(
+                    f"✅ **Login Successful!** Connected to **{shop_name}**.\n\nYou now have full access to this shop's database. Type `/stock` or ask any query!",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(f"❌ {login_res.get('message')}\n\nPlease try logging in again with /start.")
+            return
 
     chat_id = update.effective_chat.id
     owner_id = telegram_id
