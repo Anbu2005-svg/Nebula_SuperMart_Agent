@@ -206,6 +206,14 @@ def run_agent_turn(
                 try:
                     tool_result = TOOL_DISPATCH[func_name](**func_args)
                     
+                    # Auto-update default_payment_mode preference when payment_mode is specified
+                    if func_name in ["quick_create_bill", "finalize_bill"] and func_args.get("payment_mode"):
+                        try:
+                            from skills.preferences import set_preference
+                            set_preference(str(owner_id), "default_payment_mode", str(func_args["payment_mode"]).lower().strip())
+                        except Exception as e_pref:
+                            logger.warning(f"Could not auto-update default payment mode preference: {e_pref}")
+
                     # Track file generation output if applicable
                     if isinstance(tool_result, dict) and "file_path" in tool_result:
                         generated_files.append(tool_result["file_path"])
