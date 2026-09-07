@@ -94,7 +94,7 @@ GROUNDING & INTEGRITY RULES:
 1. Grounding: Inventory prices, stock quantities, GST slabs, and customer balances MUST come ONLY from tool execution results. Never guess or hallucinate prices or stock numbers.
 2. Oversell Guard: If a tool returns an oversell warning or error, relay the refusal clearly to the owner (e.g. "Cannot sell X units; only Y in stock.").
 3. GST Math: All GST calculations are calculated deterministically by tools. You just explain the breakdown to the owner.
-4. Billing Speed & Workflow: When asked to make or start a bill (e.g. "make a bill: 2kg sugar, 1 Aashirvaad atta 5kg, 4 Maggi, 1 Amul butter, UPI"), NEVER issue separate search or stock check pre-flight tool calls. IMMEDIATELY issue `start_bill` and ALL `add_item_to_bill` tool calls for every item directly in your VERY FIRST tool response turn. `add_item_to_bill` automatically resolves product names, stock levels, prices, and GST. If exact product SKU variants differ slightly (e.g. 5kg vs 10kg), `add_item_to_bill` will match the closest product name. If finalizing or payment mode (UPI, Cash, Khata) is given in the prompt, you may also finalize or finalize after adding items. Always generate the bill in 1 to 2 tool turns maximum!
+4. Billing Speed & Workflow: When asked to make or start a bill (e.g. "make a bill: 2kg sugar, 1 Aashirvaad atta 5kg, 4 Maggi, 1 Amul butter, UPI"), ALWAYS use the `quick_create_bill` tool. Pass all items as a list `[{"name": "sugar", "qty": 2}, ...]`, along with customer_name and payment_mode if provided. This executes bill creation, stock validation, tax math, and finalization in 1 single call for maximum speed!
 5. Customer Credit (Khata): Always check or record khata using tools. If a customer is not found, inform the user clearly instead of guessing.
 6. Owner Preferences: Respect standing preferences (e.g. default payment mode, default shop name) injected in the system context.
 7. Clear & Readable Formatting: Present items in a clean, structured format using emojis (e.g. 📊, 📌, 🔹) or clean bullet dots (`•`). NEVER output raw hyphens/dashes (`-`) or slashes (`/`) at the beginning of list items or bullet lines. Use `•` or emojis for ALL bullet points and lists without exception. Avoid raw Markdown headers (like #, ##, ###); use bold text (*text*) with emojis for section titles.
@@ -113,6 +113,7 @@ TOOL_DISPATCH: Dict[str, Callable] = {
     "search_products": inventory.search_products,
     "start_bill": billing.start_bill,
     "add_item_to_bill": billing.add_item_to_bill,
+    "quick_create_bill": billing.quick_create_bill,
     "remove_item_from_bill": billing.remove_item_from_bill,
     "edit_item_qty": billing.edit_item_qty,
     "preview_bill": billing.preview_bill,
@@ -218,6 +219,33 @@ TOOLS_SCHEMA = [
                     "query": {"type": "string", "description": "Search keyword"}
                 },
                 "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quick_create_bill",
+            "description": "ULTRAFAST single-turn bill generator. Pass all items, customer name, and payment mode to start, add items, and finalize a bill in 1 single call!",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "List of objects with 'name' and 'qty', e.g. [{'name': 'sugar', 'qty': 2}, {'name': 'Maggi', 'qty': 4}]",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Product SKU or name"},
+                                "qty": {"type": "number", "description": "Quantity"}
+                            },
+                            "required": ["name", "qty"]
+                        }
+                    },
+                    "customer_name": {"type": "string", "description": "Optional customer name"},
+                    "payment_mode": {"type": "string", "description": "Optional payment mode: 'upi', 'cash', 'card', 'khata'"}
+                },
+                "required": ["items"]
             }
         }
     },

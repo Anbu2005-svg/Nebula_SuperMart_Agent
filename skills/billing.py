@@ -453,3 +453,52 @@ def finalize_bill(
 
     finally:
         conn.close()
+
+def quick_create_bill(
+    items: List[Dict[str, Any]],
+    customer_name: Optional[str] = None,
+    payment_mode: Optional[str] = None,
+    idempotency_key: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    ⚡ ULTRAFALL/ULTRAFAST Single-Turn Billing Tool:
+    Creates draft bill, adds all items (name/sku & qty), and optionally finalizes in 1 single call!
+    
+    `items` format: [{"name": "sugar", "qty": 2}, {"name": "Maggi", "qty": 4}]
+    `payment_mode`: Optional "upi", "cash", "card", or "khata". If omitted, leaves bill as draft.
+    """
+    # 1. Start bill
+    start_res = start_bill(customer_name=customer_name)
+    if start_res.get("status") != "success":
+        return start_res
+        
+    bill_id = start_res["bill_id"]
+    added_summary = []
+    warnings = []
+    
+    # 2. Add all items
+    for item in items:
+        name = item.get("name") or item.get("sku_or_name") or item.get("sku")
+        qty = float(item.get("qty", 1))
+        if not name:
+            continue
+        res = add_item_to_bill(bill_id=bill_id, sku_or_name=name, qty=qty)
+        if res.get("status") == "success":
+            added_summary.append(f"{qty} {res.get('product_name')}")
+        elif res.get("status") == "oversell_warning":
+            warnings.append(res.get("message"))
+        else:
+            warnings.append(f"Failed to add '{name}': {res.get('message')}")
+
+    # 3. Finalize if payment mode provided
+    if payment_mode:
+        fin_res = finalize_bill(bill_id=bill_id, payment_mode=payment_mode, idempotency_key=idempotency_key)
+        if warnings:
+            fin_res["warnings"] = warnings
+        return fin_res
+    else:
+        preview = preview_bill(bill_id=bill_id)
+        if warnings:
+            preview["warnings"] = warnings
+        return preview
+
