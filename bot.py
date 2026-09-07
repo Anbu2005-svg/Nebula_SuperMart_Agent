@@ -370,18 +370,20 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
         if res.get("status") == "success":
             msg = (
                 "✅ **Default Problem Statement Stocks Populated!**\n\n"
-                "📦 **10 Essential Supermarket Stock Items Loaded:**\n"
-                "• Aashirvaad Wheat Atta 10kg — MRP ₹440 (Stock: 30)\n"
+                "📦 **Problem Statement SKUs Loaded:**\n"
+                "• Aashirvaad Whole Wheat Atta 5kg — MRP ₹245 (Stock: 30)\n"
                 "• Tata Iodized Salt 1kg — MRP ₹28 (Stock: 50)\n"
-                "• Amul Pasteurised Butter 500g — MRP ₹275 (Stock: 20)\n"
+                "• Amul Pasteurised Butter 100g — MRP ₹62 (Stock: 20)\n"
                 "• Fortune Sunlite Sunflower Oil 1L — MRP ₹155 (Stock: 40)\n"
-                "• Maggi 2-Min Instant Noodles 70g — MRP ₹14 (Stock: 100)\n"
+                "• Maggi 2-Minute Instant Noodles 70g — MRP ₹14 (Stock: 100)\n"
+                "• Parle-G Gold Biscuits 80g — MRP ₹10 (Stock: 80)\n"
+                "• Surf Excel Detergent Powder 1kg — MRP ₹140 (Stock: 25)\n"
                 "• Amul Taaza Toned Milk 1L — MRP ₹56 (Stock: 25)\n"
-                "• Refined White Sugar 1kg — MRP ₹48 (Stock: 60)\n"
-                "• Red Label Tea 250g — MRP ₹140 (Stock: 15)\n"
-                "• Dettol Original Bathing Soap 125g — MRP ₹48 (Stock: 40)\n"
-                "• India Gate Basmati Rice 5kg — MRP ₹475 (Stock: 12)\n\n"
-                "🛒 Your shop is now ready! Type `/stock` or `/bill` to start managing sales."
+                "• Refined White Sugar 1kg (Loose) — MRP ₹48 (Stock: 60)\n"
+                "• Basmati Rice 1kg (Loose) — MRP ₹80 (Stock: 50)\n"
+                "• Toor Dal 1kg (Loose) — MRP ₹135 (Stock: 40)\n"
+                "• Brooke Bond Red Label Tea 250g — MRP ₹140 (Stock: 15)\n\n"
+                "🛒 Your shop is ready! Type `/stock` or `/bill` to start."
             )
             await query.edit_message_text(msg, parse_mode="Markdown")
         else:
