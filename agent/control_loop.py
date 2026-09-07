@@ -61,10 +61,14 @@ def run_agent_turn(
     conn = get_db_connection()
     try:
         if update_id:
-            cur = conn.execute("SELECT * FROM idempotency_log WHERE update_id = ?", (str(update_id),))
+            cur = conn.cursor()
+            cur.execute("SELECT update_id FROM idempotency_log WHERE update_id = %s", (str(update_id),))
             if cur.fetchone():
+                cur.close()
+                conn.close()
                 logger.info(f"Duplicate update_id {update_id} skipped due to idempotency log.")
                 return ("This update has already been processed.", [])
+            cur.close()
     finally:
         conn.close()
 
@@ -158,7 +162,12 @@ def run_agent_turn(
                 c = get_db_connection()
                 try:
                     with immediate_transaction(c):
-                        c.execute("INSERT OR IGNORE INTO idempotency_log (update_id) VALUES (?)", (str(update_id),))
+                        cur2 = c.cursor()
+                        cur2.execute(
+                            "INSERT INTO idempotency_log (update_id) VALUES (%s) ON CONFLICT (update_id) DO NOTHING",
+                            (str(update_id),)
+                        )
+                        cur2.close()
                 finally:
                     c.close()
                     

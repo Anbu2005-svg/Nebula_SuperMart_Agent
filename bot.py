@@ -364,9 +364,8 @@ def main():
         print("ERROR: Please set a valid TELEGRAM_BOT_TOKEN in your .env file!")
         return
 
-    # Ensure DB exists and is seeded
-    db_path = os.getenv("DB_PATH", "supermarket.db")
-    seed_database(db_path)
+    # Initialize & seed PostgreSQL database schema
+    seed_database()
 
     app = ApplicationBuilder().token(token).post_init(post_init).build()
 

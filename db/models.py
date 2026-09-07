@@ -1,42 +1,46 @@
 import os
-import sqlite3
+import json
+import psycopg2
+import psycopg2.extras
 from contextlib import contextmanager
 from typing import Optional
 
-DEFAULT_DB_PATH = "supermarket.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
-    """Returns a sqlite3 Connection with WAL mode enabled and Row factory configured."""
-    if db_path is None:
-        db_path = os.getenv("DB_PATH", DEFAULT_DB_PATH)
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
+
+def get_db_connection():
+    """Returns a psycopg2 Connection using DATABASE_URL with RealDictCursor for dict-like row access."""
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL is not set in environment variables!")
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn.autocommit = False
     return conn
 
-def init_db(db_path: str = DEFAULT_DB_PATH, schema_file: Optional[str] = None):
-    """Initializes SQLite database using schema.sql."""
+
+def init_db(schema_file: Optional[str] = None):
+    """Initializes PostgreSQL database using postgres_schema.sql."""
     if schema_file is None:
-        schema_file = os.path.join(os.path.dirname(__file__), "schema.sql")
-    
+        schema_file = os.path.join(os.path.dirname(__file__), "postgres_schema.sql")
+
     with open(schema_file, "r", encoding="utf-8") as f:
         sql_script = f.read()
-    
-    conn = get_db_connection(db_path)
+
+    conn = get_db_connection()
     try:
-        conn.executescript(sql_script)
+        cur = conn.cursor()
+        cur.execute(sql_script)
         conn.commit()
+        cur.close()
     finally:
         conn.close()
 
+
 @contextmanager
-def immediate_transaction(conn: sqlite3.Connection):
+def immediate_transaction(conn):
     """
-    Context manager that executes 'BEGIN IMMEDIATE' to acquire a write lock upfront,
-    preventing concurrent race conditions on SQLite database writes.
+    Context manager for atomic PostgreSQL transactions.
+    Commits on success, rolls back on exception.
     """
-    conn.execute("BEGIN IMMEDIATE")
     try:
         yield conn
         conn.commit()

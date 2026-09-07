@@ -140,38 +140,49 @@ SAMPLE_CUSTOMERS = [
     {"name": "Suresh Patel", "khata_balance": 0.0}
 ]
 
-def seed_database(db_path: str = "supermarket.db"):
-    init_db(db_path)
-    conn = get_db_connection(db_path)
+
+def seed_database():
+    """Initialize schema and seed PostgreSQL database with sample products and customers."""
+    print("Initializing PostgreSQL schema...")
+    init_db()
+    conn = get_db_connection()
     try:
-        # Seed Products
+        cur = conn.cursor()
+
+        # Seed Products — upsert using ON CONFLICT
         for p in SAMPLE_PRODUCTS:
-            conn.execute("""
+            cur.execute("""
                 INSERT INTO products (sku_id, name, category, unit, is_loose, cost_price, mrp, gst_slab, hsn_code, quantity, reorder_level)
-                VALUES (:sku_id, :name, :category, :unit, :is_loose, :cost_price, :mrp, :gst_slab, :hsn_code, :quantity, :reorder_level)
-                ON CONFLICT(sku_id) DO UPDATE SET
-                    name=excluded.name,
-                    category=excluded.category,
-                    cost_price=excluded.cost_price,
-                    mrp=excluded.mrp,
-                    gst_slab=excluded.gst_slab,
-                    quantity=excluded.quantity,
-                    reorder_level=excluded.reorder_level
+                VALUES (%(sku_id)s, %(name)s, %(category)s, %(unit)s, %(is_loose)s, %(cost_price)s, %(mrp)s, %(gst_slab)s, %(hsn_code)s, %(quantity)s, %(reorder_level)s)
+                ON CONFLICT (sku_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    category = EXCLUDED.category,
+                    cost_price = EXCLUDED.cost_price,
+                    mrp = EXCLUDED.mrp,
+                    gst_slab = EXCLUDED.gst_slab,
+                    quantity = EXCLUDED.quantity,
+                    reorder_level = EXCLUDED.reorder_level
             """, p)
-            
-        # Seed Customers
+
+        # Seed Customers — upsert
         for c in SAMPLE_CUSTOMERS:
-            conn.execute("""
+            cur.execute("""
                 INSERT INTO customers (name, khata_balance)
-                VALUES (:name, :khata_balance)
-                ON CONFLICT(name) DO UPDATE SET
-                    khata_balance=excluded.khata_balance
+                VALUES (%(name)s, %(khata_balance)s)
+                ON CONFLICT (name) DO UPDATE SET
+                    khata_balance = EXCLUDED.khata_balance
             """, c)
-            
+
         conn.commit()
-        print(f"Database successfully seeded at {db_path} with {len(SAMPLE_PRODUCTS)} products and {len(SAMPLE_CUSTOMERS)} customers.")
+        cur.close()
+        print(f"PostgreSQL database seeded with {len(SAMPLE_PRODUCTS)} products and {len(SAMPLE_CUSTOMERS)} customers.")
+    except Exception as e:
+        conn.rollback()
+        print(f"Seeding error: {e}")
+        raise
     finally:
         conn.close()
+
 
 if __name__ == "__main__":
     seed_database()
