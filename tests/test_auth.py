@@ -74,3 +74,35 @@ def test_logout_and_chat_clear_preserves_database_inventory():
     prods_after = list_all_products()
     assert prods_after["status"] == "success"
     assert prods_after["count"] == initial_count
+
+
+def test_24h_session_expiration():
+    user_id = "test_user_expiry_777"
+    shop_name = "Expiry Test Shop"
+    password = "Password777"
+
+    register_shop(shop_name=shop_name, password=password)
+    login_shop(telegram_id=user_id, shop_name=shop_name, password=password)
+
+    # 1. Freshly logged in -> active session
+    assert is_user_authenticated(user_id) is True
+
+    # 2. Simulate 25 hours elapsed by updating authenticated_at in database
+    from db.models import get_db_connection, immediate_transaction
+    conn = get_db_connection()
+    try:
+        with immediate_transaction(conn):
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE user_sessions SET authenticated_at = (CURRENT_TIMESTAMP - INTERVAL '25 hours') WHERE telegram_id = %s",
+                (str(user_id),)
+            )
+            cur.close()
+    finally:
+        conn.close()
+
+    # 3. Next session lookup should automatically purge expired session and return None
+    session = get_user_session(user_id)
+    assert session is None
+    assert is_user_authenticated(user_id) is False
+

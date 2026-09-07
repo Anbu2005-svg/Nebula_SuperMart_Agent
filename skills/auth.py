@@ -88,13 +88,33 @@ def login_shop(telegram_id: str, shop_name: str, password: str) -> Dict[str, Any
         conn.close()
 
 
+SESSION_EXPIRY_HOURS = 24
+
+
+def cleanup_expired_sessions() -> int:
+    """Purge all user sessions older than 24 hours from PostgreSQL."""
+    conn = get_db_connection()
+    try:
+        with immediate_transaction(conn):
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_sessions WHERE authenticated_at < (CURRENT_TIMESTAMP - INTERVAL '24 hours')")
+            deleted_count = cur.rowcount
+            cur.close()
+        return deleted_count
+    except Exception:
+        return 0
+    finally:
+        conn.close()
+
+
 def get_user_session(telegram_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch active shop session for a Telegram user."""
+    """Fetch active shop session for a Telegram user. Purges and returns None if expired (> 24 hours)."""
+    cleanup_expired_sessions()
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT s.* FROM user_sessions us
+            SELECT s.*, us.authenticated_at FROM user_sessions us
             JOIN shops s ON us.shop_id = s.shop_id
             WHERE us.telegram_id = %s
         """, (str(telegram_id),))
@@ -105,7 +125,8 @@ def get_user_session(telegram_id: str) -> Optional[Dict[str, Any]]:
                 "shop_id": shop["shop_id"],
                 "shop_name": shop["shop_name"],
                 "shop_address": shop["shop_address"],
-                "shop_gstin": shop["shop_gstin"]
+                "shop_gstin": shop["shop_gstin"],
+                "authenticated_at": shop["authenticated_at"]
             }
         return None
     finally:
