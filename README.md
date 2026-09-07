@@ -42,10 +42,7 @@ LLM_MODEL=nemotron-3-super
 LLM_API_KEY_1=your_ollama_api_key_here
 DB_PATH=supermarket.db
 DATABASE_URL=postgresql://user:password@host:5432/supermarket_db
-SHOP_NAME=Nebula SuperMart
-SHOP_ADDRESS=123 Main Street, Chennai, TN - 600001
-SHOP_GSTIN=33AABCU9603R1ZM
-REQUIRE_AUTH=false
+REQUIRE_AUTH=true
 ```
 
 ### 3. PostgreSQL & Prisma Database Deployment
