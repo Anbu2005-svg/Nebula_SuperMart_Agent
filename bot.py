@@ -289,7 +289,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = telegram_id
     update_id = str(update.update_id)
 
-    # ⚡ Send instant "thinking" placeholder — user sees feedback immediately
+    # ⚡ 1. Send immediate typing status to Telegram chat header
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    except Exception:
+        pass
+
+    # ⚡ 2. Send instant "thinking" placeholder message — user sees feedback in chat instantly
     thinking_phrases = [
         "🤔 *Agent is thinking...*",
         "⚙️ *Processing your request...*",
