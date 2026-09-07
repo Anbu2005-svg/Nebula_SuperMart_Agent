@@ -81,10 +81,27 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
 
     story = []
 
-    # Shop Header
+    # Dynamic Shop Header resolution from active shop session or fallback DB preference / env
     shop_name = os.getenv("SHOP_NAME", "Nebula SuperMart")
     shop_address = os.getenv("SHOP_ADDRESS", "123 Main Street, Chennai, TN - 600001")
     shop_gstin = os.getenv("SHOP_GSTIN", "33AABCU9603R1ZM")
+
+    try:
+        from skills.auth import get_user_session
+        # Check if shop metadata exists in active session or database
+        from db.models import get_db_connection
+        conn = get_db_connection()
+        try:
+            cur = conn.execute("SELECT shop_name, shop_address, shop_gstin FROM shops LIMIT 1")
+            shop_row = cur.fetchone()
+            if shop_row:
+                shop_name = shop_row["shop_name"] or shop_name
+                shop_address = shop_row["shop_address"] or shop_address
+                shop_gstin = shop_row["shop_gstin"] or shop_gstin
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
     story.append(Paragraph(f"<b>{shop_name}</b>", title_style))
     story.append(Paragraph(f"{shop_address} | GSTIN: {shop_gstin}", subtitle_style))
