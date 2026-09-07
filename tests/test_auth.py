@@ -47,3 +47,30 @@ def test_multi_shop_auth_lifecycle():
     # 5. Logout
     logout_user_session(user_id)
     assert is_user_authenticated(user_id) is False
+
+def test_logout_and_chat_clear_preserves_database_inventory():
+    user_id = "test_user_persistent_99"
+    shop_name = "Persistent Store"
+    password = "Pass123Password"
+
+    register_shop(shop_name=shop_name, password=password)
+    login_shop(telegram_id=user_id, shop_name=shop_name, password=password)
+
+    from skills.inventory import list_all_products
+    # 1. Fetch products before logout/clear
+    prods_before = list_all_products()
+    assert prods_before["status"] == "success"
+    initial_count = prods_before["count"]
+    assert initial_count > 0
+
+    # 2. Clear conversation memory (Simulating chat delete / reset)
+    from agent.control_loop import clear_conversation
+    clear_conversation(12345678)
+
+    # 3. Logout user session
+    logout_user_session(user_id)
+
+    # 4. Verify Database Inventory Stock is 100% Intact & Unmodified
+    prods_after = list_all_products()
+    assert prods_after["status"] == "success"
+    assert prods_after["count"] == initial_count
