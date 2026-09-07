@@ -90,7 +90,7 @@ def run_agent_turn(
     messages.append({"role": "user", "content": user_message})
 
     generated_files: List[str] = []
-    max_steps = 10
+    max_steps = 15
     step_count = 0
 
     # 4. Multi-step Agent Loop
