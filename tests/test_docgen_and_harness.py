@@ -49,7 +49,7 @@ def test_pptx_deck_slides_creation():
 
 def test_llm_tool_dispatch_completeness():
     schema_names = [t["function"]["name"] for t in TOOLS_SCHEMA]
-    assert len(schema_names) == 23
+    assert len(schema_names) == len(TOOL_DISPATCH)
     for name in schema_names:
         assert name in TOOL_DISPATCH
         assert callable(TOOL_DISPATCH[name])
