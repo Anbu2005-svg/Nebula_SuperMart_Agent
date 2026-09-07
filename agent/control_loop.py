@@ -15,7 +15,7 @@ def clear_conversation(chat_id: int):
     """Clear in-memory chat session history (used by /new command). Preferences persist in DB!"""
     CONVERSATION_HISTORY[chat_id] = []
 
-def _call_llm_with_failover(messages, tools, max_tokens=2500):
+def _call_llm_with_failover(messages, tools, max_tokens=1000):
     """
     Call the LLM API with automatic failover to the backup API key on rate limit (429) errors.
     Tries current key → on 429/rate limit → switches to next key → retries once.
