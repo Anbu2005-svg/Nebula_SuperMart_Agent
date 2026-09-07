@@ -1,0 +1,102 @@
+-- PostgreSQL Schema Migration for Prisma / Render / Supabase / Neon
+-- Project: Nebula SuperMart AI Ops Agent
+
+CREATE TABLE IF NOT EXISTS products (
+    sku_id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(255) NOT NULL,
+    unit VARCHAR(50) NOT NULL,
+    is_loose BOOLEAN DEFAULT FALSE,
+    cost_price DOUBLE PRECISION NOT NULL,
+    mrp DOUBLE PRECISION NOT NULL,
+    gst_slab DOUBLE PRECISION NOT NULL DEFAULT 0,
+    hsn_code VARCHAR(100),
+    quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
+    reorder_level DOUBLE PRECISION NOT NULL DEFAULT 10
+);
+
+CREATE TABLE IF NOT EXISTS customers (
+    customer_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    khata_balance DOUBLE PRECISION DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS bills (
+    bill_id VARCHAR(255) PRIMARY KEY,
+    status VARCHAR(50) NOT NULL DEFAULT 'draft',
+    customer_id INTEGER NULL REFERENCES customers(customer_id) ON DELETE SET NULL,
+    payment_mode VARCHAR(50),
+    payment_ref VARCHAR(255),
+    subtotal DOUBLE PRECISION DEFAULT 0,
+    cgst DOUBLE PRECISION DEFAULT 0,
+    sgst DOUBLE PRECISION DEFAULT 0,
+    total DOUBLE PRECISION DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    finalized_at TIMESTAMP WITH TIME ZONE NULL
+);
+
+CREATE TABLE IF NOT EXISTS bill_items (
+    id SERIAL PRIMARY KEY,
+    bill_id VARCHAR(255) NOT NULL REFERENCES bills(bill_id) ON DELETE CASCADE,
+    sku_id VARCHAR(255) NOT NULL REFERENCES products(sku_id) ON DELETE CASCADE,
+    qty DOUBLE PRECISION NOT NULL,
+    unit_price DOUBLE PRECISION NOT NULL,
+    gst_slab DOUBLE PRECISION NOT NULL DEFAULT 0,
+    line_total DOUBLE PRECISION NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS khata_transactions (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(customer_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    amount DOUBLE PRECISION NOT NULL,
+    bill_id VARCHAR(255) NULL REFERENCES bills(bill_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS preferences (
+    owner_id VARCHAR(255) NOT NULL,
+    key VARCHAR(255) NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (owner_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS idempotency_log (
+    update_id VARCHAR(255) PRIMARY KEY,
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS shops (
+    shop_id SERIAL PRIMARY KEY,
+    shop_name VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    shop_address TEXT NULL,
+    shop_gstin VARCHAR(100) NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    telegram_id VARCHAR(255) PRIMARY KEY,
+    shop_id INTEGER NOT NULL REFERENCES shops(shop_id) ON DELETE CASCADE,
+    authenticated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS authenticated_users (
+    telegram_id VARCHAR(255) PRIMARY KEY,
+    phone_number VARCHAR(100) NULL,
+    authenticated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id SERIAL PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(100),
+    entity_id VARCHAR(255),
+    details TEXT,
+    old_value DOUBLE PRECISION,
+    new_value DOUBLE PRECISION,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_event ON audit_log(event_type);

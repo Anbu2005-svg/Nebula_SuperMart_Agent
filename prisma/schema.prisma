@@ -1,0 +1,144 @@
+// Prisma Schema for PostgreSQL Deployment
+// Project: Nebula SuperMart AI Ops Agent
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-py"
+}
+
+model Product {
+  sku_id        String      @id
+  name          String
+  category      String
+  unit          String
+  is_loose      Boolean     @default(false)
+  cost_price    Float
+  mrp           Float
+  gst_slab      Float       @default(0)
+  hsn_code      String?
+  quantity      Float       @default(0)
+  reorder_level Float       @default(10)
+  bill_items    BillItem[]
+
+  @@map("products")
+}
+
+model Customer {
+  customer_id        Int                 @id @default(autoincrement())
+  name               String              @unique
+  khata_balance      Float               @default(0)
+  bills              Bill[]
+  khata_transactions KhataTransaction[]
+
+  @@map("customers")
+}
+
+model Bill {
+  bill_id            String              @id
+  status             String              @default("draft")
+  customer_id        Int?
+  payment_mode       String?
+  payment_ref        String?
+  subtotal           Float               @default(0)
+  cgst               Float               @default(0)
+  sgst               Float               @default(0)
+  total              Float               @default(0)
+  created_at         DateTime            @default(now())
+  finalized_at       DateTime?
+  customer           Customer?           @relation(fields: [customer_id], references: [customer_id])
+  bill_items         BillItem[]
+  khata_transactions KhataTransaction[]
+
+  @@map("bills")
+}
+
+model BillItem {
+  id         Int     @id @default(autoincrement())
+  bill_id    String
+  sku_id     String
+  qty        Float
+  unit_price Float
+  gst_slab   Float   @default(0)
+  line_total Float
+  bill       Bill    @relation(fields: [bill_id], references: [bill_id])
+  product    Product @relation(fields: [sku_id], references: [sku_id])
+
+  @@map("bill_items")
+}
+
+model KhataTransaction {
+  id          Int      @id @default(autoincrement())
+  customer_id Int
+  type        String
+  amount      Float
+  bill_id     String?
+  created_at  DateTime @default(now())
+  customer    Customer @relation(fields: [customer_id], references: [customer_id])
+  bill        Bill?    @relation(fields: [bill_id], references: [bill_id])
+
+  @@map("khata_transactions")
+}
+
+model Preference {
+  owner_id String
+  key      String
+  value    String
+
+  @@id([owner_id, key])
+  @@map("preferences")
+}
+
+model IdempotencyLog {
+  update_id    String   @id
+  processed_at DateTime @default(now())
+
+  @@map("idempotency_log")
+}
+
+model Shop {
+  shop_id       Int           @id @default(autoincrement())
+  shop_name     String        @unique
+  password_hash String
+  shop_address  String?
+  shop_gstin    String?
+  created_at    DateTime      @default(now())
+  user_sessions UserSession[]
+
+  @@map("shops")
+}
+
+model UserSession {
+  telegram_id      String   @id
+  shop_id          Int
+  authenticated_at DateTime @default(now())
+  shop             Shop     @relation(fields: [shop_id], references: [shop_id])
+
+  @@map("user_sessions")
+}
+
+model AuthenticatedUser {
+  telegram_id      String   @id
+  phone_number     String?
+  authenticated_at DateTime @default(now())
+
+  @@map("authenticated_users")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  event_type  String
+  entity_type String?
+  entity_id   String?
+  details     String?
+  old_value   Float?
+  new_value   Float?
+  created_at  DateTime @default(now())
+
+  @@index([entity_id], name: "idx_audit_entity")
+  @@index([event_type], name: "idx_audit_event")
+  @@map("audit_log")
+}

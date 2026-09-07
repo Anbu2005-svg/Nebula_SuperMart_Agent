@@ -41,22 +41,29 @@ LLM_BASE_URL=https://ollama.com/v1
 LLM_MODEL=nemotron-3-super
 LLM_API_KEY_1=your_ollama_api_key_here
 DB_PATH=supermarket.db
+DATABASE_URL=postgresql://user:password@host:5432/supermarket_db
 SHOP_NAME=Nebula SuperMart
 SHOP_ADDRESS=123 Main Street, Chennai, TN - 600001
 SHOP_GSTIN=33AABCU9603R1ZM
 REQUIRE_AUTH=false
 ```
 
-> 🔐 **Authentication Guidance:**
-> * **`REQUIRE_AUTH=false` (Default for Reviewers):** Allows instant, friction-free testing of all 23 AI tools across any Telegram client without mobile contact sharing prompts.
-> * **`REQUIRE_AUTH=true` (Production Mode):** Enforces 1-click Telegram mobile contact verification (`📱 Click to Verify Mobile Number`) & `/logout` session management.
-
-### 3. Initialize Database & Run Tests
+### 3. PostgreSQL & Prisma Database Deployment
+For cloud database deployment (Render, Supabase, Neon, Railway, Vercel Postgres):
 ```bash
-# Seed SQLite database with the 10 initial supermarket products & sample customers
+# 1. Generate Prisma Client
+prisma generate
+
+# 2. Push Prisma Schema to PostgreSQL Cloud Database
+prisma db push
+```
+
+### 4. Initialize Database & Run Tests
+```bash
+# Seed database with initial supermarket catalog & sample customers
 python -m db.seed
 
-# Run the complete 34-test automated test suite
+# Run the complete automated test suite
 pytest tests/ -v
 ```
 
