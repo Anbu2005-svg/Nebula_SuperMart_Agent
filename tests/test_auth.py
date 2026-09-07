@@ -1,7 +1,7 @@
 import pytest
 import os
 from db.seed import seed_database
-from skills.auth import is_user_authenticated, authenticate_user, deauthenticate_user
+from skills.auth import register_shop, login_shop, get_user_session, is_user_authenticated, logout_user_session
 
 TEST_DB = "test_auth.db"
 
@@ -14,28 +14,36 @@ def setup_test_db():
     orig_path = db.models.DEFAULT_DB_PATH
     db.models.DEFAULT_DB_PATH = TEST_DB
     
-    import skills.auth
-    orig_require = skills.auth.REQUIRE_AUTH
-    skills.auth.REQUIRE_AUTH = True
-    
     yield
     
-    skills.auth.REQUIRE_AUTH = orig_require
     db.models.DEFAULT_DB_PATH = orig_path
     if os.path.exists(TEST_DB):
         os.remove(TEST_DB)
 
-def test_simple_user_auth_lifecycle():
-    user_id = "test_evaluator_999"
-    
+from skills.auth import register_shop, login_shop, get_user_session, is_user_authenticated, logout_user_session
+
+def test_multi_shop_auth_lifecycle():
+    user_id = "test_telegram_owner_101"
+    shop_name = "SuperMart Central"
+    password = "SecretPassword123"
+
     # 1. Initially unauthenticated
-    deauthenticate_user(user_id)
+    logout_user_session(user_id)
     assert is_user_authenticated(user_id) is False
 
-    # 2. Authenticate user via contact share
-    authenticate_user(user_id, phone_number="+919876543210")
+    # 2. Register Shop
+    reg_res = register_shop(shop_name=shop_name, password=password, shop_address="456 Main St", shop_gstin="33AABCU9603R1ZM")
+    assert reg_res["status"] == "success"
+
+    # 3. Login to Shop
+    login_res = login_shop(telegram_id=user_id, shop_name=shop_name, password=password)
+    assert login_res["status"] == "success"
     assert is_user_authenticated(user_id) is True
 
-    # 3. Deauthenticate user (logout)
-    deauthenticate_user(user_id)
+    # 4. Session Lookup
+    session = get_user_session(user_id)
+    assert session["shop_name"] == shop_name
+
+    # 5. Logout
+    logout_user_session(user_id)
     assert is_user_authenticated(user_id) is False
