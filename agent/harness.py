@@ -132,6 +132,19 @@ GROUNDING & INTEGRITY RULES:
 13. SKU Identification Rule: ALWAYS include the exact SKU ID **inline** immediately after the product name on the same bullet line, in square brackets. Format EVERY product line like:
    `• Product Name [SKU-XXXX-YY] – Qty: X | MRP: ₹XX.XX | GST: X%`
    Never put SKUs in a separate section or separate line. The SKU must appear in the SAME bullet point, right after the product name, before the dash. This applies to ALL product listings, stock views, reorder alerts, and bill items.
+14. Customer & Payment Label Rule: ALWAYS label customer fields as 'Customer Name:' (never just 'Customer:'). ALWAYS explicitly display 'Payment Mode: <CASH/UPI/CARD/KHATA>' in all bill previews, finalizations, text summaries, and invoices.
+15. Government GST Rate Verification Rule: When the user mentions a GST update or asks to change GST rates (e.g. 'Government changed GST on Sugar to 5%'), DO NOT update immediately. First, check current GST rates using `get_stock` or `search_products`, and ask the shop owner for explicit confirmation summarizing the exact change:
+   `⚠️ CONFIRM GST SLAB UPDATE:`
+   `• Target: <Product/Category/HSN>`
+   `• Current GST: X% ➔ Proposed New GST: Y%`
+   `Please reply 'YES' to confirm and update catalog.`
+   ONLY call `update_gst_slab` after the user explicitly confirms (e.g. 'yes', 'confirm', 'proceed', 'ok').
+16. Brand & Multiple Matches Disambiguation Rule: When a user mentions a generic item (e.g. 'milk', 'atta', 'oil', 'soap') and multiple matching brands/varieties exist (e.g. Aavin Milk vs Amul Milk), or when a tool returns `multiple_matches`, inspect inventory and ask the shop owner to specify:
+   `We have multiple options for '<item>':`
+   `• Brand A [SKU-A] – MRP: ₹XX | Stock: X`
+   `• Brand B [SKU-B] – MRP: ₹YY | Stock: Y`
+   `Which brand/variety would you like?`
+   NEVER guess the brand automatically when multiple exist. ALWAYS enforce strict oversell protection—if requested quantity > available stock, refuse or warn immediately with available stock numbers.
 """
 
 # Tool Dispatch Map
@@ -139,6 +152,7 @@ TOOL_DISPATCH: Dict[str, Callable] = {
     "get_stock": inventory.get_stock,
     "receive_stock": inventory.receive_stock,
     "add_product": inventory.add_product,
+    "update_gst_slab": inventory.update_gst_slab,
     "populate_default_inventory": inventory.populate_default_inventory,
     "list_low_stock": inventory.list_low_stock,
     "list_all_products": inventory.list_all_products,
@@ -216,6 +230,23 @@ TOOLS_SCHEMA = [
                     "reorder_level": {"type": "number", "description": "Low stock reorder threshold (default 10)"}
                 },
                 "required": ["name", "category", "unit", "is_loose", "cost_price", "mrp", "gst_slab", "hsn_code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_gst_slab",
+            "description": "Update GST slab (percentage) for products by product name/SKU, category, or HSN code when government updates GST slabs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "new_gst_slab": {"type": "number", "description": "New GST slab percentage (0, 5, 12, 18, or 28)"},
+                    "sku_or_name": {"type": "string", "description": "Optional product name or SKU to update (e.g. 'Sugar' or 'SKU-SUGAR-1K')"},
+                    "category": {"type": "string", "description": "Optional category filter to update all products in that category"},
+                    "hsn_code": {"type": "string", "description": "Optional HSN code to update all products with that HSN code (e.g. '1701')"}
+                },
+                "required": ["new_gst_slab"]
             }
         }
     },

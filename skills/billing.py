@@ -62,16 +62,34 @@ def start_bill(customer_name: Optional[str] = None) -> Dict[str, Any]:
         conn.close()
 
 
-def _resolve_sku(conn, sku_or_name: str) -> Optional[Dict]:
-    """Helper to resolve SKU ID or product name to a product record."""
+def _resolve_sku(conn, sku_or_name: str) -> Dict[str, Any]:
+    """Helper to resolve SKU ID or product name to a product record or multiple matches."""
     cur = conn.cursor()
+    # 1. Search by exact SKU ID
     cur.execute("SELECT * FROM products WHERE sku_id = %s", (sku_or_name.strip(),))
     product = cur.fetchone()
-    if not product:
-        cur.execute("SELECT * FROM products WHERE name ILIKE %s LIMIT 1", (f"%{sku_or_name.strip()}%",))
-        product = cur.fetchone()
+    if product:
+        cur.close()
+        return {"status": "single", "product": product}
+
+    # 2. Search by exact product name (case-insensitive)
+    cur.execute("SELECT * FROM products WHERE name ILIKE %s", (sku_or_name.strip(),))
+    exact_matches = cur.fetchall()
+    if len(exact_matches) == 1:
+        cur.close()
+        return {"status": "single", "product": exact_matches[0]}
+
+    # 3. Fuzzy search by name or category
+    cur.execute("SELECT * FROM products WHERE name ILIKE %s ORDER BY name ASC", (f"%{sku_or_name.strip()}%",))
+    matches = cur.fetchall()
     cur.close()
-    return product
+
+    if not matches:
+        return {"status": "not_found", "product": None}
+    if len(matches) == 1:
+        return {"status": "single", "product": matches[0]}
+
+    return {"status": "multiple", "matches": matches, "product": None}
 
 
 def add_item_to_bill(bill_id: str, sku_or_name: str, qty: float) -> Dict[str, Any]:
@@ -89,9 +107,19 @@ def add_item_to_bill(bill_id: str, sku_or_name: str, qty: float) -> Dict[str, An
         if bill["status"] != "draft":
             return {"status": "error", "message": f"Bill '{bill_id}' is already {bill['status']} and cannot be edited."}
 
-        product = _resolve_sku(conn, sku_or_name)
-        if not product:
+        res_sku = _resolve_sku(conn, sku_or_name)
+        if res_sku["status"] == "not_found":
             return {"status": "error", "message": f"Product matching '{sku_or_name}' not found."}
+        if res_sku["status"] == "multiple":
+            matches = res_sku["matches"]
+            match_list = [f"• {p['name']} [{p['sku_id']}] – MRP: ₹{p['mrp']} | Stock: {p['quantity']} {p['unit']}" for p in matches]
+            return {
+                "status": "multiple_matches",
+                "message": f"Found multiple products matching '{sku_or_name}'. Please specify which brand/variety you want:\n" + "\n".join(match_list),
+                "matches": [{"sku_id": p["sku_id"], "name": p["name"], "mrp": p["mrp"], "quantity": p["quantity"], "unit": p["unit"]} for p in matches]
+            }
+
+        product = res_sku["product"]
 
         # Oversell soft check during draft addition
         if qty > product["quantity"]:
@@ -169,7 +197,8 @@ def remove_item_from_bill(bill_id: str, sku_or_name: str) -> Dict[str, Any]:
         if not bill or bill["status"] != "draft":
             return {"status": "error", "message": f"Bill '{bill_id}' not found or not in draft state."}
 
-        product = _resolve_sku(conn, sku_or_name)
+        res_sku = _resolve_sku(conn, sku_or_name)
+        product = res_sku.get("product") if res_sku.get("status") == "single" else (res_sku.get("matches")[0] if res_sku.get("matches") else None)
         if not product:
             return {"status": "error", "message": f"Product matching '{sku_or_name}' not found."}
 
@@ -198,7 +227,8 @@ def edit_item_qty(bill_id: str, sku_or_name: str, new_qty: float) -> Dict[str, A
         if not bill or bill["status"] != "draft":
             return {"status": "error", "message": f"Bill '{bill_id}' not found or not in draft state."}
 
-        product = _resolve_sku(conn, sku_or_name)
+        res_sku = _resolve_sku(conn, sku_or_name)
+        product = res_sku.get("product") if res_sku.get("status") == "single" else (res_sku.get("matches")[0] if res_sku.get("matches") else None)
         if not product:
             return {"status": "error", "message": f"Product matching '{sku_or_name}' not found."}
 
@@ -299,7 +329,11 @@ def preview_bill(bill_id: str) -> Dict[str, Any]:
             "status": "success",
             "bill_id": bill_id,
             "bill_status": bill["status"],
+            "payment_mode": (bill["payment_mode"] or "Pending").upper() if bill.get("payment_mode") else "Pending",
+            "payment_ref": bill.get("payment_ref"),
             "customer_name": bill["customer_name"] or "Walk-in Customer",
+            "created_at": str(bill["created_at"]) if bill.get("created_at") else None,
+            "finalized_at": str(bill["finalized_at"]) if bill.get("finalized_at") else None,
             "items": item_previews,
             "summary": {
                 "subtotal": round(subtotal, 2),

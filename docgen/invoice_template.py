@@ -109,15 +109,19 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
     story.append(Spacer(1, 10))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2B6CB0'), spaceAfter=15))
 
-    # Bill Info Table
+    payment_mode_str = (bill_data.get('payment_mode') or 'Pending').upper()
     info_data = [
         [
             Paragraph(f"<b>Tax Invoice</b>", ParagraphStyle('H2', fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#2B6CB0'))),
             Paragraph(f"<b>Bill ID:</b> {bill_data['bill_id']}", right_cell_style)
         ],
         [
-            Paragraph(f"<b>Customer:</b> {bill_data['customer_name']}", cell_style),
+            Paragraph(f"<b>Customer Name:</b> {bill_data['customer_name']}", cell_style),
             Paragraph(f"<b>Status:</b> {bill_data['bill_status'].upper()}", right_cell_style)
+        ],
+        [
+            Paragraph(f"<b>Payment Mode:</b> {payment_mode_str}", cell_style),
+            Paragraph(f"<b>Date:</b> {bill_data.get('finalized_at') or bill_data.get('created_at') or 'N/A'}", right_cell_style)
         ]
     ]
     info_table = Table(info_data, colWidths=[270, 270])

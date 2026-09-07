@@ -1,7 +1,7 @@
 import os
 import pytest
 from db.seed import seed_database
-from skills.inventory import add_product, receive_stock, search_products, list_low_stock, get_stock
+from skills.inventory import add_product, receive_stock, search_products, list_low_stock, get_stock, update_gst_slab
 
 TEST_DB = "test_inventory_edge.db"
 
@@ -60,3 +60,11 @@ def test_list_low_stock():
     assert res["status"] == "success"
     # SKU-RICE-1K has reorder_level=10 and we set quantity=2, so it must appear
     assert any("Rice" in item["name"] for item in res["low_stock_items"])
+
+def test_update_gst_slab():
+    res = update_gst_slab(new_gst_slab=5.0, sku_or_name="Sugar")
+    assert res["status"] == "success"
+    assert res["new_gst_slab"] == 5.0
+    st = get_stock("Sugar")
+    assert st["product"]["gst_slab"] == 5.0
+

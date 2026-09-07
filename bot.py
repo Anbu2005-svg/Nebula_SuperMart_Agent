@@ -484,6 +484,8 @@ def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("logout", logout_command))
     app.add_handler(CommandHandler("new", new_command))
+    app.add_handler(CommandHandler("reset", new_command))
+    app.add_handler(CommandHandler("clear", new_command))
     app.add_handler(CommandHandler("stock", stock_command))
     app.add_handler(CommandHandler("lowstock", lowstock_command))
     app.add_handler(CommandHandler("bill", bill_command))

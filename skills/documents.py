@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from docgen.invoice_template import generate_pdf_invoice
 from docgen.deck_builder import generate_analysis_pptx
 
@@ -21,13 +21,13 @@ def generate_invoice_pdf(bill_id: str) -> Dict[str, Any]:
             "message": f"Failed to generate PDF invoice: {str(e)}"
         }
 
-def generate_analysis_deck(period: str = "Today") -> Dict[str, Any]:
+def generate_analysis_deck(period: str = "Today", shop_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Generate a PowerPoint (.pptx) executive sales analysis presentation deck.
     Returns status and file path of the generated PPTX document.
     """
     try:
-        pptx_path = generate_analysis_pptx(period)
+        pptx_path = generate_analysis_pptx(period, shop_name=shop_name)
         return {
             "status": "success",
             "message": f"PowerPoint Analysis Deck generated successfully for period '{period}'.",
