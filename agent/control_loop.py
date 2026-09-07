@@ -89,9 +89,31 @@ def run_agent_turn(
     # Append user input
     messages.append({"role": "user", "content": user_message})
 
-    # ⚡ Speed Optimization: Keep last 10 messages (plus system prompt) to prevent context bloat & slow LLM inference
+    # ⚡ Smart Context Compression: Summarize older chat turns into a single context memory message
     if len(messages) > 11:
-        CONVERSATION_HISTORY[chat_id] = [messages[0]] + messages[-10:]
+        # System prompt is index 0
+        system_msg = messages[0]
+        # Older turns to summarize: from index 1 up to index -10
+        older_turns = messages[1:-10]
+        recent_turns = messages[-10:]
+        
+        # Build concise summary block of past context
+        summary_lines = []
+        for m in older_turns:
+            role = m.get("role")
+            content = m.get("content")
+            if role == "user" and content:
+                summary_lines.append(f"User asked: {content}")
+            elif role == "assistant" and content and not m.get("tool_calls"):
+                summary_lines.append(f"Agent summary: {content[:150]}...")
+                
+        summary_text = "\n".join(summary_lines[-6:])  # Keep key highlights
+        context_summary_msg = {
+            "role": "user",
+            "content": f"[CONVERSATION CONTEXT SUMMARY OF EARLIER TURNS]:\n{summary_text}\n\n[Continuing conversation below]:"
+        }
+        
+        CONVERSATION_HISTORY[chat_id] = [system_msg, context_summary_msg] + recent_turns
         messages = CONVERSATION_HISTORY[chat_id]
 
     generated_files: List[str] = []
