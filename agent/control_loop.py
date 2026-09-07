@@ -72,11 +72,22 @@ def run_agent_turn(
     finally:
         conn.close()
 
-    # 2. Fetch persistent standing preferences
+    # 2. Fetch persistent standing preferences & shop session info
+    from skills.auth import get_user_session
+    session = get_user_session(owner_id)
+    shop_info = ""
+    if session:
+        shop_info = (
+            f"ACTIVE CONNECTED SHOP SESSION:\n"
+            f"• Shop Name: {session['shop_name']}\n"
+            f"• Address: {session['shop_address'] or 'Not specified'}\n"
+            f"• GSTIN: {session['shop_gstin'] or 'Not specified'}\n"
+        )
+
     prefs = get_all_preferences(owner_id)
     pref_str = "\n".join([f"- {k}: {v}" for k, v in prefs.items()]) if prefs else "None set yet."
     
-    dynamic_system_prompt = f"{SYSTEM_PROMPT}\n\nSTANDING OWNER PREFERENCES (Persisted in DB across chats):\n{pref_str}\n"
+    dynamic_system_prompt = f"{SYSTEM_PROMPT}\n\n{shop_info}\nSTANDING OWNER PREFERENCES (Persisted in DB across chats):\n{pref_str}\n"
 
     # 3. Initialize or fetch conversation history
     if chat_id not in CONVERSATION_HISTORY:

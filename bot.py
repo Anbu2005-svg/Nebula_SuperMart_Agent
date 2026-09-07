@@ -244,18 +244,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if reg_res.get("status") == "success":
                 login_res = login_shop(telegram_id=telegram_id, shop_name=shop_name, password=password)
                 USER_AUTH_STATE.pop(telegram_id, None)
-                if get_product_count() == 0:
-                    empty_msg = (
-                        f"🎉 **Registration Successful!** Shop **{shop_name}** is now ready!\n\n"
-                        "⚠️ **Your Shop Inventory is currently empty (0 products)!**\n\n"
-                        "Would you like to auto-populate the **Default Problem Statement Stock Items** (10 essentials: Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea)?"
-                    )
-                    await update.message.reply_text(empty_msg, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
-                else:
-                    await update.message.reply_text(
-                        f"🎉 **Registration Successful!**\n\nShop **{shop_name}** is now ready! Anyone in your shop can log in using Shop Name: `{shop_name}` & your Password.\n\nType `/stock` or ask any query to start!",
-                        parse_mode="Markdown"
-                    )
+                welcome_new_shop = (
+                    f"🎉 **Registration Successful!** Shop **{shop_name}** created!\n\n"
+                    "📦 **Inventory Setup Option**:\n"
+                    "Would you like to auto-populate the **Default Problem Statement Stock Items** (10 essentials: Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea) to get started immediately, or add your own custom stocks?"
+                )
+                await update.message.reply_text(welcome_new_shop, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
             else:
                 await update.message.reply_text(f"❌ {reg_res.get('message')}\n\nPlease try again by clicking /start.")
                 USER_AUTH_STATE.pop(telegram_id, None)
