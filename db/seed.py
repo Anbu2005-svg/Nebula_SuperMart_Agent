@@ -141,7 +141,7 @@ SAMPLE_CUSTOMERS = [
 ]
 
 
-def seed_database():
+def seed_database(db_path=None):
     """Initialize schema and seed PostgreSQL database with sample products and customers."""
     print("Initializing PostgreSQL schema...")
     init_db()

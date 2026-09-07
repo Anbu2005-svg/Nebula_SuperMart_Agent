@@ -227,3 +227,34 @@ def search_products(query: str) -> Dict[str, Any]:
         return {"status": "success", "count": len(items), "products": items}
     finally:
         conn.close()
+
+
+def get_product_count() -> int:
+    """Return total number of products in current shop inventory database."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) as count FROM products")
+        row = cur.fetchone()
+        cur.close()
+        return row["count"] if row else 0
+    except Exception:
+        return 0
+    finally:
+        conn.close()
+
+
+def populate_default_inventory() -> Dict[str, Any]:
+    """Populate empty inventory with the 10 standard problem statement stock items and sample customers."""
+    from db.seed import seed_database
+    try:
+        seed_database()
+        count = get_product_count()
+        return {
+            "status": "success",
+            "message": f"Successfully auto-populated inventory with {count} default problem statement stock items (Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea) and sample customers!",
+            "product_count": count
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to populate default stocks: {str(e)}"}
+

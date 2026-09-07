@@ -23,17 +23,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, BotCommand
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardRemove,
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters
 )
-from db.seed import seed_database
+from db.models import init_db
 from agent.control_loop import run_agent_turn, clear_conversation
 from skills.documents import generate_invoice_pdf, generate_analysis_deck
+from skills.inventory import get_product_count, populate_default_inventory
 from skills.auth import (
     is_user_authenticated,
     register_shop,
@@ -52,6 +62,14 @@ def get_auth_choice_keyboard():
         [KeyboardButton(text="🔑 Existing Shop (Log In)")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+def get_empty_inventory_keyboard():
+    """Returns inline keyboard asking user if they want to load default problem statement stocks."""
+    keyboard = [
+        [InlineKeyboardButton("📦 Add Default Problem Statement Stocks", callback_data="seed_default_stocks")],
+        [InlineKeyboardButton("➕ Skip & Add Custom Stocks", callback_data="skip_default_stocks")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command — starts fresh conversation context for user."""
@@ -84,6 +102,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/logout` — Log out of this shop session"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+
+    # Check if inventory is empty
+    if get_product_count() == 0:
+        empty_msg = (
+            "⚠️ **Your Shop Inventory is currently empty (0 products)!**\n\n"
+            "Would you like to auto-populate the **Default Problem Statement Stock Items** (10 essentials: Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea)?"
+        )
+        await update.message.reply_text(empty_msg, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
 
 async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /logout command."""
@@ -218,10 +244,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if reg_res.get("status") == "success":
                 login_res = login_shop(telegram_id=telegram_id, shop_name=shop_name, password=password)
                 USER_AUTH_STATE.pop(telegram_id, None)
-                await update.message.reply_text(
-                    f"🎉 **Registration Successful!**\n\nShop **{shop_name}** is now ready! Anyone in your shop can log in using Shop Name: `{shop_name}` & your Password.\n\nType `/stock` or ask any query to start!",
-                    parse_mode="Markdown"
-                )
+                if get_product_count() == 0:
+                    empty_msg = (
+                        f"🎉 **Registration Successful!** Shop **{shop_name}** is now ready!\n\n"
+                        "⚠️ **Your Shop Inventory is currently empty (0 products)!**\n\n"
+                        "Would you like to auto-populate the **Default Problem Statement Stock Items** (10 essentials: Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea)?"
+                    )
+                    await update.message.reply_text(empty_msg, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
+                else:
+                    await update.message.reply_text(
+                        f"🎉 **Registration Successful!**\n\nShop **{shop_name}** is now ready! Anyone in your shop can log in using Shop Name: `{shop_name}` & your Password.\n\nType `/stock` or ask any query to start!",
+                        parse_mode="Markdown"
+                    )
             else:
                 await update.message.reply_text(f"❌ {reg_res.get('message')}\n\nPlease try again by clicking /start.")
                 USER_AUTH_STATE.pop(telegram_id, None)
@@ -241,10 +275,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             USER_AUTH_STATE.pop(telegram_id, None)
             
             if login_res.get("status") == "success":
-                await update.message.reply_text(
-                    f"✅ **Login Successful!** Connected to **{shop_name}**.\n\nYou now have full access to this shop's database. Type `/stock` or ask any query!",
-                    parse_mode="Markdown"
-                )
+                if get_product_count() == 0:
+                    empty_msg = (
+                        f"✅ **Login Successful!** Connected to **{shop_name}**.\n\n"
+                        "⚠️ **Your Shop Inventory is currently empty (0 products)!**\n\n"
+                        "Would you like to auto-populate the **Default Problem Statement Stock Items** (10 essentials: Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea)?"
+                    )
+                    await update.message.reply_text(empty_msg, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
+                else:
+                    await update.message.reply_text(
+                        f"✅ **Login Successful!** Connected to **{shop_name}**.\n\nYou now have full access to this shop's database. Type `/stock` or ask any query!",
+                        parse_mode="Markdown"
+                    )
             else:
                 await update.message.reply_text(f"❌ {login_res.get('message')}\n\nPlease try logging in again with /start.")
             return
@@ -324,8 +366,50 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
+async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline button callbacks for populating default problem statement stocks."""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "seed_default_stocks":
+        res = populate_default_inventory()
+        if res.get("status") == "success":
+            msg = (
+                "✅ **Default Problem Statement Stocks Populated!**\n\n"
+                "📦 **10 Essential Supermarket Stock Items Loaded:**\n"
+                "• Aashirvaad Wheat Atta 10kg — MRP ₹440 (Stock: 30)\n"
+                "• Tata Iodized Salt 1kg — MRP ₹28 (Stock: 50)\n"
+                "• Amul Pasteurised Butter 500g — MRP ₹275 (Stock: 20)\n"
+                "• Fortune Sunlite Sunflower Oil 1L — MRP ₹155 (Stock: 40)\n"
+                "• Maggi 2-Min Instant Noodles 70g — MRP ₹14 (Stock: 100)\n"
+                "• Amul Taaza Toned Milk 1L — MRP ₹56 (Stock: 25)\n"
+                "• Refined White Sugar 1kg — MRP ₹48 (Stock: 60)\n"
+                "• Red Label Tea 250g — MRP ₹140 (Stock: 15)\n"
+                "• Dettol Original Bathing Soap 125g — MRP ₹48 (Stock: 40)\n"
+                "• India Gate Basmati Rice 5kg — MRP ₹475 (Stock: 12)\n\n"
+                "🛒 Your shop is now ready! Type `/stock` or `/bill` to start managing sales."
+            )
+            await query.edit_message_text(msg, parse_mode="Markdown")
+        else:
+            await query.edit_message_text(f"❌ {res.get('message')}")
+    elif query.data == "skip_default_stocks":
+        await query.edit_message_text(
+            "👍 **Got it! Starting with clean inventory.**\n\n"
+            "You can add products anytime by asking the agent, e.g.:\n"
+            "`Add product Milk 1L, MRP 60, Cost 50, Stock 20` or type `/stock`!",
+            parse_mode="Markdown"
+        )
+
 async def stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /stock command."""
+    if get_product_count() == 0:
+        empty_msg = (
+            "📦 *Shop Inventory is Empty (0 products)*\n\n"
+            "Would you like to auto-populate the **Default Problem Statement Stock Items** (10 essentials: Maggi, Wheat Atta, Sugar, Oil, Milk, Rice, Salt, Soap, Butter, Tea)?"
+        )
+        await update.message.reply_text(empty_msg, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
+        return
+
     update.message.text = "Show all products in stock with prices and quantities"
     await handle_message(update, context)
 
@@ -382,8 +466,8 @@ def main():
         print("ERROR: Please set a valid TELEGRAM_BOT_TOKEN in your .env file!")
         return
 
-    # Initialize & seed PostgreSQL database schema
-    seed_database()
+    # Initialize PostgreSQL database schema if not exists
+    init_db()
 
     app = ApplicationBuilder().token(token).post_init(post_init).build()
 
@@ -399,6 +483,7 @@ def main():
     app.add_handler(CommandHandler("invoice", invoice_command))
     app.add_handler(CommandHandler("analysis", analysis_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(button_callback_handler))
     app.add_handler(MessageHandler(filters.CONTACT | (filters.TEXT & ~filters.COMMAND), handle_message))
 
     print(f"🤖 Supermarket Ops Agent Telegram Bot is running...")

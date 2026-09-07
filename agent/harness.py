@@ -109,6 +109,7 @@ TOOL_DISPATCH: Dict[str, Callable] = {
     "get_stock": inventory.get_stock,
     "receive_stock": inventory.receive_stock,
     "add_product": inventory.add_product,
+    "populate_default_inventory": inventory.populate_default_inventory,
     "list_low_stock": inventory.list_low_stock,
     "list_all_products": inventory.list_all_products,
     "search_products": inventory.search_products,
@@ -194,6 +195,17 @@ TOOLS_SCHEMA = [
             "name": "list_low_stock",
             "description": "List all products where stock quantity is at or below the reorder level.",
             "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "populate_default_inventory",
+            "description": "Auto-populate an empty shop inventory with the 10 standard problem statement sample stock items (Maggi, Wheat Atta, Sugar, Sunflower Oil, Milk, Basmati Rice, Salt, Soap, Butter, Tea) and sample customers.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
         }
     },
     {
