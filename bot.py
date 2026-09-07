@@ -468,6 +468,31 @@ async def post_init(application):
     await application.bot.set_my_commands(commands)
     logger.info("Successfully pushed comprehensive bot commands menu to Telegram API.")
 
+def start_health_check_server():
+    """Starts a minimal HTTP server in a background thread to satisfy Render Web Service port checks."""
+    import threading
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    class HealthCheckHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"Bot is healthy!")
+
+        def log_message(self, format, *args):
+            return  # Suppress HTTP server access logs
+
+    port = int(os.getenv("PORT", "8080"))
+    try:
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        print(f"🌐 Health check HTTP server listening on port {port}")
+    except Exception as e:
+        print(f"⚠️ Could not start health check server on port {port}: {e}")
+
+
 def main():
     """Main application entry point."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -477,6 +502,9 @@ def main():
 
     # Initialize PostgreSQL database schema if not exists
     init_db()
+
+    # Start health check server for Render Web Service
+    start_health_check_server()
 
     app = ApplicationBuilder().token(token).post_init(post_init).build()
 
@@ -509,3 +537,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
