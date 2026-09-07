@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from dotenv import load_dotenv
 
@@ -161,15 +162,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = telegram_id
     update_id = str(update.update_id)
 
-    # Show typing status while AI processes turn
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    # 💬 Continuous ChatGPT-style typing indicator while agent processes multi-turn requests
+    async def keep_typing():
+        try:
+            while True:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+                await asyncio.sleep(4)
+        except asyncio.CancelledError:
+            pass
 
-    reply_text, generated_files = run_agent_turn(
-        user_message=user_text,
-        chat_id=chat_id,
-        owner_id=owner_id,
-        update_id=update_id
-    )
+    typing_task = asyncio.create_task(keep_typing())
+
+    try:
+        reply_text, generated_files = await asyncio.to_thread(
+            run_agent_turn,
+            user_message=user_text,
+            chat_id=chat_id,
+            owner_id=owner_id,
+            update_id=update_id
+        )
+    finally:
+        typing_task.cancel()
 
     # Send text response formatted with Markdown
     try:
