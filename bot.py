@@ -23,6 +23,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# In-memory guard: prevent the same Telegram update_id from being processed
+# more than once in a single bot process (handles Telegram's retry/duplicate sends)
+_PROCESSING_UPDATES: set = set()
+
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
@@ -289,68 +293,80 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     owner_id = telegram_id
     update_id = str(update.update_id)
 
-    # ⚡ 1. Send immediate typing status to Telegram chat header
+    # ⚡ In-memory dedup: silently drop if this update_id is already being processed
+    # (handles Telegram retries / duplicate deliveries within the same process)
+    if update_id in _PROCESSING_UPDATES:
+        logger.info(f"Duplicate update_id {update_id} already in-flight — silently dropped.")
+        return
+    _PROCESSING_UPDATES.add(update_id)
+
     try:
-        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-    except Exception:
-        pass
-
-    # ⚡ 2. Send instant "thinking" placeholder message — user sees feedback in chat instantly
-    thinking_phrases = [
-        "🤔 *Agent is thinking...*",
-        "⚙️ *Processing your request...*",
-        "🔍 *Looking up your supermarket data...*",
-    ]
-    import hashlib as _hs
-    phrase_idx = int(_hs.md5(user_text.encode()).hexdigest(), 16) % len(thinking_phrases)
-    thinking_msg = await update.message.reply_text(
-        thinking_phrases[phrase_idx], parse_mode="Markdown"
-    )
-
-    # 💬 Keep sending typing action in background so Telegram shows "typing..." in chat header
-    async def keep_typing():
+        # ⚡ 1. Send immediate typing status to Telegram chat header
         try:
-            while True:
-                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-                await asyncio.sleep(4)
-        except asyncio.CancelledError:
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        except Exception:
             pass
 
-    typing_task = asyncio.create_task(keep_typing())
-
-    try:
-        reply_text, generated_files = await asyncio.to_thread(
-            run_agent_turn,
-            user_message=user_text,
-            chat_id=chat_id,
-            owner_id=owner_id,
-            update_id=update_id
+        # ⚡ 2. Send instant "thinking" placeholder message — user sees feedback in chat instantly
+        thinking_phrases = [
+            "🤔 *Agent is thinking...*",
+            "⚙️ *Processing your request...*",
+            "🔍 *Looking up your supermarket data...*",
+        ]
+        import hashlib as _hs
+        phrase_idx = int(_hs.md5(user_text.encode()).hexdigest(), 16) % len(thinking_phrases)
+        thinking_msg = await update.message.reply_text(
+            thinking_phrases[phrase_idx], parse_mode="Markdown"
         )
-    finally:
-        typing_task.cancel()
 
-    # ✅ Edit the "thinking" placeholder with the actual response
-    try:
-        await thinking_msg.edit_text(reply_text, parse_mode="Markdown")
-    except Exception:
-        try:
-            await thinking_msg.edit_text(reply_text)
-        except Exception:
-            # If edit fails (e.g. message too old), send as new message
+        # 💬 Keep sending typing action in background so Telegram shows "typing..." in chat header
+        async def keep_typing():
             try:
-                await update.message.reply_text(reply_text, parse_mode="Markdown")
-            except Exception:
-                await update.message.reply_text(reply_text)
+                while True:
+                    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+                    await asyncio.sleep(4)
+            except asyncio.CancelledError:
+                pass
 
-    # Send generated document files if any
-    for file_path in generated_files:
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as doc:
-                await update.message.reply_document(
-                    document=doc,
-                    filename=os.path.basename(file_path),
-                    caption=f"Generated File: {os.path.basename(file_path)}"
-                )
+        typing_task = asyncio.create_task(keep_typing())
+
+        try:
+            reply_text, generated_files = await asyncio.to_thread(
+                run_agent_turn,
+                user_message=user_text,
+                chat_id=chat_id,
+                owner_id=owner_id,
+                update_id=update_id
+            )
+        finally:
+            typing_task.cancel()
+
+        # ✅ Edit the "thinking" placeholder with the actual response
+        try:
+            await thinking_msg.edit_text(reply_text, parse_mode="Markdown")
+        except Exception:
+            try:
+                await thinking_msg.edit_text(reply_text)
+            except Exception:
+                # If edit fails (e.g. message too old), send as new message
+                try:
+                    await update.message.reply_text(reply_text, parse_mode="Markdown")
+                except Exception:
+                    await update.message.reply_text(reply_text)
+
+        # Send generated document files if any
+        for file_path in generated_files:
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as doc:
+                    await update.message.reply_document(
+                        document=doc,
+                        filename=os.path.basename(file_path),
+                        caption=f"Generated File: {os.path.basename(file_path)}"
+                    )
+    finally:
+        # Always release the in-flight guard — even if an error occurred
+        _PROCESSING_UPDATES.discard(update_id)
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command — displays command menu and quick start guide."""

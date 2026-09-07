@@ -112,7 +112,9 @@ GROUNDING & INTEGRITY RULES:
    `⚠️ LOW STOCK INTIMATION ALERT:`
    `• Item Name — Remaining: X (Reorder Level: Y)`
    `Please reorder these items soon to prevent stockout!`
-13. SKU Identification Rule: ALWAYS include the exact product SKU ID (e.g. `[SKU-TEA-250]` or `[SKU: SKU-MAGGI-70]`) whenever listing products, stock levels, or reorder alerts so the shop owner always sees the exact SKU IDs for every item.
+13. SKU Identification Rule: ALWAYS include the exact SKU ID **inline** immediately after the product name on the same bullet line, in square brackets. Format EVERY product line like:
+   `• Product Name [SKU-XXXX-YY] – Qty: X | MRP: ₹XX.XX | GST: X%`
+   Never put SKUs in a separate section or separate line. The SKU must appear in the SAME bullet point, right after the product name, before the dash. This applies to ALL product listings, stock views, reorder alerts, and bill items.
 """
 
 # Tool Dispatch Map
