@@ -46,7 +46,7 @@ def get_stock(query: str) -> Dict[str, Any]:
     finally:
         conn.close()
 
-def receive_stock(sku_id: str, qty: float, cost_price: float, mrp: Optional[float] = None) -> Dict[str, Any]:
+def receive_stock(sku_id: str, qty: float, cost_price: Optional[float] = None, mrp: Optional[float] = None) -> Dict[str, Any]:
     """Receive inventory stock (increases stock quantity). Updates cost_price and optional mrp."""
     if qty <= 0:
         return {"status": "error", "message": "Received quantity must be positive"}
@@ -65,7 +65,7 @@ def receive_stock(sku_id: str, qty: float, cost_price: float, mrp: Optional[floa
             
             real_sku = product["sku_id"]
             new_qty = product["quantity"] + qty
-            new_cost = cost_price
+            new_cost = cost_price if cost_price is not None else product["cost_price"]
             new_mrp = mrp if mrp is not None else product["mrp"]
 
             if new_cost > new_mrp:

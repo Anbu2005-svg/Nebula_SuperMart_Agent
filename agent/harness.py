@@ -158,10 +158,10 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "sku_id": {"type": "string", "description": "SKU ID or product name"},
                     "qty": {"type": "number", "description": "Quantity received (e.g. 50)"},
-                    "cost_price": {"type": "number", "description": "Purchase cost price per unit"},
+                    "cost_price": {"type": "number", "description": "Optional purchase cost price per unit"},
                     "mrp": {"type": "number", "description": "Optional MRP selling price"}
                 },
-                "required": ["sku_id", "qty", "cost_price"]
+                "required": ["sku_id", "qty"]
             }
         }
     },
