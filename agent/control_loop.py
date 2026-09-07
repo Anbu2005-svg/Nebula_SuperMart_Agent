@@ -89,6 +89,11 @@ def run_agent_turn(
     # Append user input
     messages.append({"role": "user", "content": user_message})
 
+    # ⚡ Speed Optimization: Keep last 10 messages (plus system prompt) to prevent context bloat & slow LLM inference
+    if len(messages) > 11:
+        CONVERSATION_HISTORY[chat_id] = [messages[0]] + messages[-10:]
+        messages = CONVERSATION_HISTORY[chat_id]
+
     generated_files: List[str] = []
     max_steps = 15
     step_count = 0
