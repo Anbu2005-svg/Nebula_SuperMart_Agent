@@ -253,7 +253,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     owner_id = telegram_id
     update_id = str(update.update_id)
 
-    # 💬 Continuous ChatGPT-style typing indicator while agent processes multi-turn requests
+    # ⚡ Send instant "thinking" placeholder — user sees feedback immediately
+    thinking_phrases = [
+        "🤔 *Agent is thinking...*",
+        "⚙️ *Processing your request...*",
+        "🔍 *Looking up your supermarket data...*",
+    ]
+    import hashlib as _hs
+    phrase_idx = int(_hs.md5(user_text.encode()).hexdigest(), 16) % len(thinking_phrases)
+    thinking_msg = await update.message.reply_text(
+        thinking_phrases[phrase_idx], parse_mode="Markdown"
+    )
+
+    # 💬 Keep sending typing action in background so Telegram shows "typing..." in chat header
     async def keep_typing():
         try:
             while True:
@@ -275,12 +287,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         typing_task.cancel()
 
-    # Send text response formatted with Markdown
+    # ✅ Edit the "thinking" placeholder with the actual response
     try:
-        await update.message.reply_text(reply_text, parse_mode="Markdown")
+        await thinking_msg.edit_text(reply_text, parse_mode="Markdown")
     except Exception:
-        # Fallback to plain text if message contains unescaped markdown characters
-        await update.message.reply_text(reply_text)
+        try:
+            await thinking_msg.edit_text(reply_text)
+        except Exception:
+            # If edit fails (e.g. message too old), send as new message
+            try:
+                await update.message.reply_text(reply_text, parse_mode="Markdown")
+            except Exception:
+                await update.message.reply_text(reply_text)
 
     # Send generated document files if any
     for file_path in generated_files:
