@@ -92,7 +92,8 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
         from db.models import get_db_connection
         conn = get_db_connection()
         try:
-            cur = conn.execute("SELECT shop_name, shop_address, shop_gstin FROM shops LIMIT 1")
+            cur = conn.cursor()
+            cur.execute("SELECT shop_name, shop_address, shop_gstin FROM shops LIMIT 1")
             shop_row = cur.fetchone()
             if shop_row:
                 shop_name = shop_row["shop_name"] or shop_name
@@ -137,7 +138,7 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
         Paragraph("<b>GST%</b>", table_header_style),
         Paragraph("<b>CGST</b>", table_header_style),
         Paragraph("<b>SGST</b>", table_header_style),
-        Paragraph("<b>Total (₹)</b>", table_header_style)
+        Paragraph("<b>Total (Rs.)</b>", table_header_style)
     ]
     
     table_rows = [headers]
@@ -147,11 +148,11 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
             Paragraph(item['name'], cell_style),
             Paragraph(item.get('hsn_code') or "-", cell_style),
             Paragraph(f"{item['qty']} {item['unit']}", cell_style),
-            Paragraph(f"₹{item['unit_price']:.2f}", right_cell_style),
+            Paragraph(f"Rs. {item['unit_price']:.2f}", right_cell_style),
             Paragraph(f"{item['gst_slab']}%", right_cell_style),
-            Paragraph(f"₹{item['cgst']:.2f}", right_cell_style),
-            Paragraph(f"₹{item['sgst']:.2f}", right_cell_style),
-            Paragraph(f"₹{item['line_total']:.2f}", right_cell_style)
+            Paragraph(f"Rs. {item['cgst']:.2f}", right_cell_style),
+            Paragraph(f"Rs. {item['sgst']:.2f}", right_cell_style),
+            Paragraph(f"Rs. {item['line_total']:.2f}", right_cell_style)
         ])
 
     items_table = Table(table_rows, colWidths=[28, 155, 42, 52, 42, 38, 45, 45, 53])
@@ -170,12 +171,12 @@ def generate_pdf_invoice(bill_id: str, output_dir: str = "generated_docs") -> st
     # Summary Breakdown Table
     summary = bill_data['summary']
     summary_data = [
-        [Paragraph("Subtotal:", cell_style), Paragraph(f"₹{summary['subtotal']:.2f}", right_cell_style)],
-        [Paragraph("Total CGST:", cell_style), Paragraph(f"₹{summary['cgst']:.2f}", right_cell_style)],
-        [Paragraph("Total SGST:", cell_style), Paragraph(f"₹{summary['sgst']:.2f}", right_cell_style)],
-        [Paragraph("Total Tax (GST):", cell_style), Paragraph(f"₹{summary['total_gst']:.2f}", right_cell_style)],
+        [Paragraph("Subtotal:", cell_style), Paragraph(f"Rs. {summary['subtotal']:.2f}", right_cell_style)],
+        [Paragraph("Total CGST:", cell_style), Paragraph(f"Rs. {summary['cgst']:.2f}", right_cell_style)],
+        [Paragraph("Total SGST:", cell_style), Paragraph(f"Rs. {summary['sgst']:.2f}", right_cell_style)],
+        [Paragraph("Total Tax (GST):", cell_style), Paragraph(f"Rs. {summary['total_gst']:.2f}", right_cell_style)],
         [Paragraph("<b>Grand Total:</b>", ParagraphStyle('GT', parent=cell_style, fontName='Helvetica-Bold', fontSize=11)), 
-         Paragraph(f"<b>₹{summary['grand_total']:.2f}</b>", ParagraphStyle('GTR', parent=right_cell_style, fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#2B6CB0')))]
+         Paragraph(f"<b>Rs. {summary['grand_total']:.2f}</b>", ParagraphStyle('GTR', parent=right_cell_style, fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#2B6CB0')))]
     ]
 
     summary_table = Table(summary_data, colWidths=[120, 100])

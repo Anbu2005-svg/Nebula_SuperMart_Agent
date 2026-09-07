@@ -465,11 +465,41 @@ def finalize_bill(
             _log_event(conn, "BILL_FINALIZED", "bill", bill_id,
                        details={"payment_mode": payment_mode, "grand_total": grand_total,
                                 "customer_name": customer_name})
-            cur.close()
+        # Check for low stock alerts after billing
+        low_stock_alerts = []
+        conn2 = get_db_connection()
+        try:
+            cur2 = conn2.cursor()
+            cur2.execute("""
+                SELECT sku_id, name, quantity, reorder_level, unit
+                FROM products
+                WHERE quantity <= reorder_level
+                ORDER BY name ASC
+            """)
+            low_items = cur2.fetchall()
+            cur2.close()
+            if low_items:
+                low_stock_alerts = [{
+                    "sku_id": p["sku_id"],
+                    "name": p["name"],
+                    "current_qty": p["quantity"],
+                    "reorder_level": p["reorder_level"],
+                    "unit": p["unit"]
+                } for p in low_items]
+        except Exception:
+            pass
+        finally:
+            conn2.close()
 
         # Return finalized bill summary
         final_preview = preview_bill(bill_id)
         final_preview["message"] = f"Bill {bill_id} finalized successfully! Total: \u20b9{grand_total} ({payment_mode.upper()})."
+        if low_stock_alerts:
+            alert_items_str = ", ".join([f"{item['name']} ({item['current_qty']} {item['unit']} left)" for item in low_stock_alerts])
+            final_preview["low_stock_warning"] = (
+                f"⚠️ LOW STOCK INTIMATION ALERT: {len(low_stock_alerts)} item(s) are at or below reorder level: {alert_items_str}. Please reorder soon!"
+            )
+            final_preview["low_stock_alerts"] = low_stock_alerts
         return final_preview
 
     finally:

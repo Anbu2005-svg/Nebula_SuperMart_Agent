@@ -179,13 +179,13 @@ async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     await update.message.reply_text(f"❌ Failed to generate analysis deck: {res.get('message', 'Unknown error')}")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text_override: Optional[str] = None):
     """Handle regular text messages and multi-step shop authentication state machine."""
     if not update.message:
         return
 
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
-    user_text = (update.message.text or "").strip()
+    user_text = user_text_override or (update.message.text or "").strip()
     if not user_text:
         return
 
@@ -377,18 +377,18 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             msg = (
                 "✅ **Default Problem Statement Stocks Populated!**\n\n"
                 "📦 **Problem Statement SKUs Loaded:**\n"
-                "• Aashirvaad Whole Wheat Atta 5kg — MRP ₹245 (Stock: 30)\n"
-                "• Tata Iodized Salt 1kg — MRP ₹28 (Stock: 50)\n"
-                "• Amul Pasteurised Butter 100g — MRP ₹62 (Stock: 20)\n"
-                "• Fortune Sunlite Sunflower Oil 1L — MRP ₹155 (Stock: 40)\n"
-                "• Maggi 2-Minute Instant Noodles 70g — MRP ₹14 (Stock: 100)\n"
-                "• Parle-G Gold Biscuits 80g — MRP ₹10 (Stock: 80)\n"
-                "• Surf Excel Detergent Powder 1kg — MRP ₹140 (Stock: 25)\n"
-                "• Amul Taaza Toned Milk 1L — MRP ₹56 (Stock: 25)\n"
-                "• Refined White Sugar 1kg (Loose) — MRP ₹48 (Stock: 60)\n"
-                "• Basmati Rice 1kg (Loose) — MRP ₹80 (Stock: 50)\n"
-                "• Toor Dal 1kg (Loose) — MRP ₹135 (Stock: 40)\n"
-                "• Brooke Bond Red Label Tea 250g — MRP ₹140 (Stock: 15)\n\n"
+                "• `[SKU-ATTA-5K]` Aashirvaad Whole Wheat Atta 5kg — MRP ₹245 (Stock: 30)\n"
+                "• `[SKU-SALT-01]` Tata Iodized Salt 1kg — MRP ₹28 (Stock: 50)\n"
+                "• `[SKU-BUTTER-100]` Amul Pasteurised Butter 100g — MRP ₹62 (Stock: 20)\n"
+                "• `[SKU-OIL-1L]` Fortune Sunlite Sunflower Oil 1L — MRP ₹155 (Stock: 40)\n"
+                "• `[SKU-MAGGI-70]` Maggi 2-Minute Instant Noodles 70g — MRP ₹14 (Stock: 100)\n"
+                "• `[SKU-PARLEG-80]` Parle-G Gold Biscuits 80g — MRP ₹10 (Stock: 80)\n"
+                "• `[SKU-SURF-1K]` Surf Excel Detergent Powder 1kg — MRP ₹140 (Stock: 25)\n"
+                "• `[SKU-MILK-1L]` Amul Taaza Toned Milk 1L — MRP ₹56 (Stock: 25)\n"
+                "• `[SKU-SUGAR-1K]` Refined White Sugar 1kg (Loose) — MRP ₹48 (Stock: 60)\n"
+                "• `[SKU-RICE-1K]` Basmati Rice 1kg (Loose) — MRP ₹80 (Stock: 50)\n"
+                "• `[SKU-DAL-1K]` Toor Dal 1kg (Loose) — MRP ₹135 (Stock: 40)\n"
+                "• `[SKU-TEA-250]` Brooke Bond Red Label Tea 250g — MRP ₹140 (Stock: 15)\n\n"
                 "🛒 Your shop is ready! Type `/stock` or `/bill` to start."
             )
             await query.edit_message_text(msg, parse_mode="Markdown")
@@ -412,36 +412,27 @@ async def stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(empty_msg, parse_mode="Markdown", reply_markup=get_empty_inventory_keyboard())
         return
 
-    update.message.text = "Show all products in stock with prices and quantities"
-    await handle_message(update, context)
+    await handle_message(update, context, user_text_override="Show all products in stock with prices and quantities")
 
 async def lowstock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /lowstock command."""
-    update.message.text = "List all low stock items at or below reorder level"
-    await handle_message(update, context)
+    await handle_message(update, context, user_text_override="List all low stock items at or below reorder level")
 
 async def bill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /bill command."""
     args = " ".join(context.args) if context.args else ""
-    if args:
-        update.message.text = f"make a bill: {args}"
-    else:
-        update.message.text = "Start a new draft bill"
-    await handle_message(update, context)
+    user_text = f"make a bill: {args}" if args else "Start a new draft bill"
+    await handle_message(update, context, user_text_override=user_text)
 
 async def khata_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /khata command."""
     args = " ".join(context.args) if context.args else ""
-    if args:
-        update.message.text = f"Khata query for {args}"
-    else:
-        update.message.text = "List all customer khata credit balances"
-    await handle_message(update, context)
+    user_text = f"Khata query for {args}" if args else "List all customer khata credit balances"
+    await handle_message(update, context, user_text_override=user_text)
 
 async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /summary command."""
-    update.message.text = "Show today's sales summary and total revenue breakdown"
-    await handle_message(update, context)
+    await handle_message(update, context, user_text_override="Show today's sales summary and total revenue breakdown")
 
 async def post_init(application):
     """Register interactive slash commands list with Telegram UI popup menu."""
@@ -489,7 +480,14 @@ def main():
     app.add_handler(MessageHandler(filters.CONTACT | (filters.TEXT & ~filters.COMMAND), handle_message))
 
     print(f"🤖 Supermarket Ops Agent Telegram Bot is running...")
-    app.run_polling()
+    try:
+        app.run_polling(drop_pending_updates=True)
+    except Exception as e:
+        if "Conflict" in str(e) or "terminated by other" in str(e):
+            print("\n⚠️ CONFLICT WARNING: Another instance of bot.py is already running on this Bot Token!")
+            print("Telegram allows only 1 active bot process at a time. Please close other terminals or processes running bot.py.")
+        else:
+            raise e
 
 if __name__ == "__main__":
     main()

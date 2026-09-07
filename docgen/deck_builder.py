@@ -52,7 +52,8 @@ def _create_charts(output_dir: str):
     conn = get_db_connection()
     try:
         # 1. Payment mode distribution chart
-        cur = conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             SELECT payment_mode, SUM(total) as mode_total 
             FROM bills 
             WHERE status = 'finalized' 
@@ -93,7 +94,8 @@ def _create_charts(output_dir: str):
         chart_paths['payment_mode'] = pm_chart_path
 
         # 2. Category revenue breakdown chart
-        cur = conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             SELECT p.category, SUM(bi.line_total) as cat_total
             FROM bill_items bi
             JOIN bills b ON bi.bill_id = b.bill_id

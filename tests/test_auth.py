@@ -1,5 +1,6 @@
 import pytest
 import os
+import uuid
 from db.seed import seed_database
 from skills.auth import register_shop, login_shop, get_user_session, is_user_authenticated, logout_user_session
 
@@ -20,11 +21,12 @@ def setup_test_db():
     if os.path.exists(TEST_DB):
         os.remove(TEST_DB)
 
-from skills.auth import register_shop, login_shop, get_user_session, is_user_authenticated, logout_user_session
 
 def test_multi_shop_auth_lifecycle():
-    user_id = "test_telegram_owner_101"
-    shop_name = "SuperMart Central"
+    # Use unique IDs per test run to avoid conflicts with shared cloud DB
+    run_id = uuid.uuid4().hex[:8]
+    user_id = f"test_telegram_owner_{run_id}"
+    shop_name = f"SuperMart Test {run_id}"
     password = "SecretPassword123"
 
     # 1. Initially unauthenticated
@@ -49,8 +51,9 @@ def test_multi_shop_auth_lifecycle():
     assert is_user_authenticated(user_id) is False
 
 def test_logout_and_chat_clear_preserves_database_inventory():
-    user_id = "test_user_persistent_99"
-    shop_name = "Persistent Store"
+    run_id = uuid.uuid4().hex[:8]
+    user_id = f"test_user_persistent_{run_id}"
+    shop_name = f"Persistent Store {run_id}"
     password = "Pass123Password"
 
     register_shop(shop_name=shop_name, password=password)

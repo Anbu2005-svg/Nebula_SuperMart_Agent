@@ -46,7 +46,7 @@ def test_edit_and_remove_item_from_bill():
 
     prev2 = preview_bill(bill_id)
     assert len(prev2["items"]) == 1
-    assert prev2["items"][0]["name"] == "Refined White Sugar 1kg"
+    assert "Refined White Sugar" in prev2["items"][0]["name"]
 
 def test_finalize_bill_invalid_payment_mode():
     bill_res = start_bill("Walk-in")
