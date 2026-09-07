@@ -32,8 +32,10 @@ def get_auth_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command."""
+    """Handle /start command — starts fresh conversation context for user."""
     telegram_id = str(update.effective_user.id) if update.effective_user else "default"
+    chat_id = update.effective_chat.id
+    clear_conversation(chat_id)
     
     if not is_user_authenticated(telegram_id):
         auth_msg = (
@@ -215,18 +217,56 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
+async def stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /stock command."""
+    update.message.text = "Show all products in stock with prices and quantities"
+    await handle_message(update, context)
+
+async def lowstock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /lowstock command."""
+    update.message.text = "List all low stock items at or below reorder level"
+    await handle_message(update, context)
+
+async def bill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /bill command."""
+    args = " ".join(context.args) if context.args else ""
+    if args:
+        update.message.text = f"make a bill: {args}"
+    else:
+        update.message.text = "Start a new draft bill"
+    await handle_message(update, context)
+
+async def khata_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /khata command."""
+    args = " ".join(context.args) if context.args else ""
+    if args:
+        update.message.text = f"Khata query for {args}"
+    else:
+        update.message.text = "List all customer khata credit balances"
+    await handle_message(update, context)
+
+async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /summary command."""
+    update.message.text = "Show today's sales summary and total revenue breakdown"
+    await handle_message(update, context)
+
 async def post_init(application):
     """Register interactive slash commands list with Telegram UI popup menu."""
     commands = [
-        BotCommand("start", "Start bot & verify mobile contact"),
-        BotCommand("new", "Reset conversation history"),
+        BotCommand("start", "Start session & fresh context"),
+        BotCommand("stock", "View all products & inventory stock"),
+        BotCommand("lowstock", "View low stock reorder items"),
+        BotCommand("bill", "Create a bill (e.g. /bill 2 sugar, UPI)"),
+        BotCommand("khata", "View customer credit balances"),
+        BotCommand("summary", "View today's sales & revenue summary"),
         BotCommand("invoice", "Download PDF GST Tax Invoice"),
         BotCommand("analysis", "Download PowerPoint Sales Deck"),
-        BotCommand("help", "Show commands guide"),
-        BotCommand("logout", "De-authenticate user session")
+        BotCommand("new", "Reset chat history fresh"),
+        BotCommand("help", "Show interactive commands guide"),
+        BotCommand("logout", "Logout & clear session")
     ]
     await application.bot.set_my_commands(commands)
-    logger.info("Successfully pushed bot commands menu to Telegram API.")
+    logger.info("Successfully pushed comprehensive bot commands menu to Telegram API.")
 
 def main():
     """Main application entry point."""
@@ -245,6 +285,11 @@ def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("logout", logout_command))
     app.add_handler(CommandHandler("new", new_command))
+    app.add_handler(CommandHandler("stock", stock_command))
+    app.add_handler(CommandHandler("lowstock", lowstock_command))
+    app.add_handler(CommandHandler("bill", bill_command))
+    app.add_handler(CommandHandler("khata", khata_command))
+    app.add_handler(CommandHandler("summary", summary_command))
     app.add_handler(CommandHandler("invoice", invoice_command))
     app.add_handler(CommandHandler("analysis", analysis_command))
     app.add_handler(CommandHandler("help", help_command))
