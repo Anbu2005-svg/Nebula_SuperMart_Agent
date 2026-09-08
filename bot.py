@@ -499,8 +499,9 @@ def start_keep_alive_pinger():
     import time
     import urllib.request
 
-    url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("KEEP_ALIVE_URL")
-    if not url:
+    enable_keep_alive = os.getenv("ENABLE_KEEP_ALIVE", "false").lower().strip() in ("true", "1", "yes")
+    url = os.getenv("KEEP_ALIVE_URL") or os.getenv("RENDER_EXTERNAL_URL")
+    if not enable_keep_alive or not url:
         return
 
     def ping_loop():
