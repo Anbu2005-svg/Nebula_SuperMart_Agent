@@ -493,6 +493,31 @@ def start_health_check_server():
         print(f"⚠️ Could not start health check server on port {port}: {e}")
 
 
+def start_keep_alive_pinger():
+    """Periodically pings the Render Web Service URL to prevent free tier 15-minute spin-down."""
+    import threading
+    import time
+    import urllib.request
+
+    url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("KEEP_ALIVE_URL")
+    if not url:
+        return
+
+    def ping_loop():
+        while True:
+            time.sleep(600)  # Ping every 10 minutes (before 15-min spin-down)
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "RenderKeepAlive/1.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    logger.info(f"Keep-alive ping to {url} status: {resp.status}")
+            except Exception as e:
+                logger.warning(f"Keep-alive ping failed: {e}")
+
+    thread = threading.Thread(target=ping_loop, daemon=True)
+    thread.start()
+    print(f"🔄 Self-pinging keep-alive enabled for {url} (every 10 mins).")
+
+
 def main():
     """Main application entry point."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -505,6 +530,9 @@ def main():
 
     # Start health check server for Render Web Service
     start_health_check_server()
+
+    # Start self-pinging keep-alive loop if RENDER_EXTERNAL_URL is configured
+    start_keep_alive_pinger()
 
     app = ApplicationBuilder().token(token).post_init(post_init).build()
 
