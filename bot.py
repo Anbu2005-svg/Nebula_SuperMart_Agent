@@ -554,8 +554,27 @@ def main():
     app.add_handler(MessageHandler(filters.CONTACT | (filters.TEXT & ~filters.COMMAND), handle_message))
 
     print(f"🤖 Supermarket Ops Agent Telegram Bot is running...")
+    use_webhook = os.getenv("USE_WEBHOOK", "false").lower().strip() in ("true", "1", "yes")
+    render_url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL")
+
     try:
-        app.run_polling(drop_pending_updates=True)
+        if use_webhook and render_url:
+            port = int(os.getenv("PORT", "8080"))
+            webhook_url = f"{render_url.rstrip('/')}/telegram"
+            print(f"🌐 Starting Telegram Webhook mode on port {port} at {webhook_url}...")
+            print(f"⚡ Render will sleep when idle and automatically wake up whenever a Telegram user sends a message!")
+            app.run_webhook(
+                listen="0.0.0.0",
+                port=port,
+                url_path="telegram",
+                webhook_url=webhook_url,
+                drop_pending_updates=True
+            )
+        else:
+            # Start health check server & self-pinger for polling mode
+            start_health_check_server()
+            start_keep_alive_pinger()
+            app.run_polling(drop_pending_updates=True)
     except Exception as e:
         if "Conflict" in str(e) or "terminated by other" in str(e):
             print("\n⚠️ CONFLICT WARNING: Another instance of bot.py is already running on this Bot Token!")
