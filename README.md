@@ -9,8 +9,17 @@
 * **GitHub Repository:** [https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent](https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent)
 * **Telegram Bot:** [@Nebula_superMart_bot](https://t.me/Nebula_superMart_bot)
 * **Live Deployment:** **Deployed Live on Render** 🚀 ([Render Web Service](https://render.com))
+* **Project Demo Video:** [Watch Full Demo Video on Google Drive 🎥](https://drive.google.com/file/d/1pdQ5xrjZ3hvjJYbu41JMtpRS_JPcJHjR/view?usp=sharing)
 * **Author / Contributor:** `Anbu2005-svg`
 * **Core Tech Stack:** Python 3.9+, Telegram Bot API (`python-telegram-bot`), Ollama Cloud OpenAI-compatible API (`nemotron-3-super`), PostgreSQL (psycopg2 / Prisma), ReportLab (PDF Invoices), python-pptx & Matplotlib (PPTX Decks), pytest.
+
+---
+
+## 🎥 Video Demonstration & Operational Walkthrough
+
+> 🎬 **Watch the Complete Project Demonstration:**  
+> Click here to watch the full operational walkthrough video on Google Drive:  
+> 👉 [**Nebula SuperMart AI Ops Agent - Video Demo**](https://drive.google.com/file/d/1pdQ5xrjZ3hvjJYbu41JMtpRS_JPcJHjR/view?usp=sharing)
 
 ---
 
