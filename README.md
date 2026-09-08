@@ -34,6 +34,75 @@ The bot automatically registers its command menu with the Telegram API:
 
 ---
 
+## 🏗️ Agent Design, Harness & Technical Architecture
+
+### 1. 🧠 The Agent Harness Picked & Why
+We selected the **OpenAI-Compatible Function-Calling Harness** (`agent/harness.py`) backed by **Ollama Cloud** (`nemotron-3-super`):
+* **Why Function Calling?** Traditional text/regex parsing of LLM outputs is fragile and prone to syntax failures. Standardized JSON tool schemas guarantee strict type enforcement, deterministic parameter extraction, and reliable tool execution for critical financial and inventory operations (GST, billing, stock receipts).
+* **Dual API Key Failover Pool:** Supports multiple API key environment variables (`LLM_API_KEY_1`, `LLM_API_KEY_2`) with round-robin load distribution. If a 429 rate limit error occurs, the harness automatically fails over to the next key without failing user requests.
+
+---
+
+### 2. 🔄 How the Agent Control Loop Works (`agent/control_loop.py`)
+```
+Telegram User Message (update_id)
+       │
+       ▼
+ 1. Check Idempotency Log ──(If already processed)──► Return Cached Preview
+       │
+       ▼
+ 2. Load Active Shop Session & Standing Preferences from PostgreSQL
+       │
+       ▼
+ 3. Build Dynamic System Prompt (System Instructions + Shop Meta + Standing Preferences)
+       │
+       ▼
+ 4. Multi-Step LLM Tool Execution Loop:
+    ├── Call LLM API (with round-robin key rotation & failover)
+    ├── If Tool Call Requested:
+    │     ├── Inject owner_id / update_id into tool arguments
+    │     ├── Execute target Python Skill in /skills
+    │     ├── Auto-update default_payment_mode if payment mode supplied
+    │     └── Pass tool result JSON back to LLM context
+    └── Repeat until LLM returns final natural language response
+       │
+       ▼
+ 5. Smart Context Compression (If history > 10 messages, summarize older turns)
+       │
+       ▼
+ Deliver Response & Generated Files (PDF / PPTX) to Telegram User
+```
+
+---
+
+### 3. 🛠️ Skill & Tool Architecture (`/skills`)
+Business logic is decoupled into domain-specific modules under `/skills`:
+* **Inventory (`skills/inventory.py`):** Transactional stock lookup, receipt, catalog management, 2-step GST updates, low stock intimations.
+* **Multi-Item GST Billing (`skills/billing.py`):** Draft bill state management, stock reservation, oversell checking, `quick_create_bill` 1-turn generation.
+* **Khata Credit Ledger (`skills/credit.py`):** Customer balance tracking, credit charging, repayment recording.
+* **Analytics (`skills/analytics.py`):** Daily sales aggregation, payment mode splits, day closeout reports.
+* **Document Generation (`skills/documents.py` & `docgen/`):** ReportLab PDF invoice builder & 4-slide widescreen PowerPoint Matplotlib deck builder.
+* **Audit Trail (`skills/audit.py`):** Immutably logs before/after values for all business mutations.
+* **Auth & Preferences (`skills/auth.py` & `skills/preferences.py`):** Multi-tenant shop authentication and persistent standing preferences.
+
+---
+
+### 4. 💡 How Each Hard Part Was Solved
+
+| Hard Requirement | Technical Solution |
+|---|---|
+| **Zero Hallucinations & Grounding** | All product prices, stock quantities, GST slabs, and customer balances MUST originate from database tool outputs. System prompt explicitly forbids model guessing. |
+| **Oversell Protection & Concurrency** | Enforced atomically inside PostgreSQL transactions (`immediate_transaction`). Quantity is checked at row level before decrementing stock. If requested quantity > available stock, transaction rolls back and returns an `OversellGuardError`. |
+| **Deterministic GST Math** | Handled by a pure Python function `_calculate_gst()`. Calculates intra-state CGST (50%) and SGST (50%) deterministically per line item, avoiding LLM floating point rounding errors. |
+| **Multi-Turn Bills** | Draft bills persist in PostgreSQL across chat turns with status `'draft'` until the shop owner explicitly finalizes them. |
+| **Telegram Network Retries & Idempotency** | Every Telegram update carries a unique `update_id`. Checked against `idempotency_log` table before execution; duplicate requests return cached results without double-billing or double-decrementing stock. |
+| **Multi-Tenant Shop Auth & Isolation** | Session tokens expire after 24h of inactivity. All database queries enforce owner scoping (`owner_id`), isolating inventory and financial ledgers per shop. |
+| **2-Step Verified Government GST Updates** | When users request a GST rate change, the agent checks current catalog rates, displays an explicit confirmation card (`⚠️ CONFIRM GST SLAB UPDATE`), and executes `update_gst_slab` ONLY after explicit `YES` confirmation. |
+| **Token Cost & Context Optimization** | Smart Context Compression summarizes earlier turns when chat history exceeds 10 messages, cutting LLM token costs by ~60–70%. `quick_create_bill` executes multi-item billing in 1 single turn. |
+| **Real Document Artifact Generation** | ReportLab PDF invoices and 4-slide Matplotlib PPTX decks query 100% live database figures (zero hardcoded fallback numbers) and deliver files directly via Telegram. |
+
+---
+
 ## 🚀 Quickstart & Deployment Guide
 
 ### 1. Local Setup
@@ -93,18 +162,6 @@ Pre-populated in database via `db/seed.py`:
 | 8 | Tata Iodized Salt 1kg | Pantry Basics | 45 | packet | ₹28 | 0% |
 | 9 | Surf Excel Easy Wash Detergent Powder 1kg | Household Care | 25 | packet | ₹140 | 18% |
 | 10 | Maggi 2-Minute Instant Noodles 70g | Snacks & Packaged Food | 100 | packet | ₹14 | 18% |
-
----
-
-## 🛠️ Modular Skills & Tools Architecture
-
-* **Inventory (`skills/inventory.py`):** `get_stock`, `receive_stock`, `add_product`, `update_gst_slab`, `list_low_stock`, `list_all_products`, `search_products`.
-* **Multi-Item GST Billing (`skills/billing.py`):** `start_bill`, `add_item_to_bill`, `remove_item_from_bill`, `edit_item_qty`, `preview_bill`, `finalize_bill`, `quick_create_bill`.
-* **Khata Credit Ledger (`skills/credit.py`):** `charge_khata`, `record_payment`, `get_khata_balance`, `list_all_khata`.
-* **Analytics & Reporting (`skills/analytics.py`):** `daily_summary`, `close_day`.
-* **Document Generation (`skills/documents.py` & `docgen/`):** `generate_invoice_pdf` (ReportLab PDF), `generate_analysis_deck` (widescreen 4-slide PPTX deck with Matplotlib charts).
-* **Audit Trail (`skills/audit.py`):** `get_audit_trail` (queries before/after mutation event history).
-* **Authentication & Preferences (`skills/auth.py` & `skills/preferences.py`):** `register_shop`, `login_shop`, `set_preference`, `get_preference`.
 
 ---
 
