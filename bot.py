@@ -528,9 +528,6 @@ def main():
     # Initialize PostgreSQL database schema if not exists
     init_db()
 
-    # Start health check server for Render Web Service
-    start_health_check_server()
-
     # Start self-pinging keep-alive loop if RENDER_EXTERNAL_URL is configured
     start_keep_alive_pinger()
 
