@@ -85,32 +85,46 @@ def test_list_all_products():
 
 def test_add_product_and_receive_stock():
     from skills.inventory import add_product, receive_stock, get_stock
+    from db.models import get_db_connection
     import uuid
 
     unique_name = f"Test Bhujia {uuid.uuid4().hex[:6]}"
+    sku = None
 
-    # 1. Add product
-    add_res = add_product(
-        name=unique_name,
-        category="Snacks & Packaged Food",
-        unit="packet",
-        is_loose=False,
-        cost_price=45.0,
-        mrp=60.0,
-        gst_slab=12.0,
-        hsn_code="2106",
-        quantity=50.0,
-        reorder_level=10.0
-    )
-    assert add_res["status"] == "success"
-    sku = add_res["sku_id"]
+    try:
+        # 1. Add product
+        add_res = add_product(
+            name=unique_name,
+            category="Snacks & Packaged Food",
+            unit="packet",
+            is_loose=False,
+            cost_price=45.0,
+            mrp=60.0,
+            gst_slab=12.0,
+            hsn_code="2106",
+            quantity=50.0,
+            reorder_level=10.0
+        )
+        assert add_res["status"] == "success"
+        sku = add_res["sku_id"]
 
-    # 2. Check stock
-    stk = get_stock(sku)
-    assert stk["status"] == "success"
-    assert stk["product"]["quantity"] == 50.0
+        # 2. Check stock
+        stk = get_stock(sku)
+        assert stk["status"] == "success"
+        assert stk["product"]["quantity"] == 50.0
 
-    # 3. Receive extra stock
-    rec = receive_stock(sku, qty=25.0, cost_price=45.0)
-    assert rec["status"] == "success"
-    assert rec["new_quantity"] == 75.0
+        # 3. Receive extra stock
+        rec = receive_stock(sku, qty=25.0, cost_price=45.0)
+        assert rec["status"] == "success"
+        assert rec["new_quantity"] == 75.0
+    finally:
+        if sku:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute("DELETE FROM products WHERE sku_id = %s", (sku,))
+                conn.commit()
+                cur.close()
+            finally:
+                conn.close()
+
