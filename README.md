@@ -8,38 +8,9 @@
 ## 📌 Project & Repository Details
 * **GitHub Repository:** [https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent](https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent)
 * **Telegram Bot:** [@Nebula_superMart_bot](https://t.me/Nebula_superMart_bot)
+* **Live Deployment:** **Deployed Live on Render** 🚀 ([Render Web Service](https://render.com))
 * **Author / Contributor:** `Anbu2005-svg`
 * **Core Tech Stack:** Python 3.9+, Telegram Bot API (`python-telegram-bot`), Ollama Cloud OpenAI-compatible API (`nemotron-3-super`), PostgreSQL (psycopg2 / Prisma), ReportLab (PDF Invoices), python-pptx & Matplotlib (PPTX Decks), pytest.
-
----
-
-## ✨ Unique Features & Key Highlights
-
-### 1. 🔐 Multi-Tenant Shop Owner Authentication (Login & Signup)
-* Supports full multi-tenant isolation where each shop owner operates securely under their own shop identity.
-* **New Shop Signup**: Allows new shop owners to register their store credentials (`shop_name`, `shop_address`, `shop_gstin`, password) directly via Telegram contact sharing or interactive prompts.
-* **Existing User Login**: Returning shop owners log in instantly with their credentials. Session state persists across chats and automatically expires after 24 hours of inactivity.
-* **Preserves Data Safety**: Multi-tenant database schema ensures inventory, bills, and Khata ledgers remain 100% isolated per shop session.
-
-### 2. 🌐 2-Step Verified Government GST Slab Rate Updates
-* **Government GST Update Handling**: When a shop owner mentions a GST slab revision (e.g. *"Government updated GST on Sugar to 5%"* or *"Verify new GST rate for Rice"*), the agent does NOT modify catalog data blindly.
-* **2-Step Verification Flow**:
-  1. The agent inspects current catalog rates using search tools.
-  2. The agent presents an explicit confirmation card to the shop owner:
-     ```text
-     ⚠️ CONFIRM GST SLAB UPDATE:
-     • Target: Refined White Sugar 1kg [SKU-SUGAR-1K]
-     • Current GST: 0% ➔ Proposed New GST: 5%
-     Please reply 'YES' to confirm and update catalog.
-     ```
-  3. Only after the user confirms with `YES` / `confirm` / `ok`, the agent invokes `update_gst_slab` to commit changes to PostgreSQL.
-
-### 3. 🛡️ Intelligent Token-Cost & Context Optimization Guardrails
-To reduce LLM token consumption, eliminate API rate limits, and cut operational LLM costs by **60% to 70%**:
-* **Smart Context Compression**: Automatically summarizes older chat history turns when conversation length exceeds 10 turns. Keeps system prompt & recent turns intact while compressing earlier turns into a compact highlight block, preventing token explosion.
-* **Ultrafast Single-Turn Execution Guard**: Executes complex multi-item billing (`quick_create_bill`) or stock receipts in 1 single LLM turn rather than forcing multi-turn search/query roundtrips.
-* **Dual API Key Failover & Round-Robin Load Balancing**: Automatically failovers across `LLM_API_KEY_1`, `LLM_API_KEY_2`, etc. when hitting 429 rate limit errors, distributing concurrent shop traffic seamlessly.
-* **Sticky Default Payment Mode Persistence**: Remembers the shop owner's preferred payment mode (e.g., `UPI`) in PostgreSQL so subsequent bills automatically finalize via `UPI` without requiring the user to re-type the payment mode every time.
 
 ---
 
@@ -88,8 +59,8 @@ pytest tests/ -v
 python bot.py
 ```
 
-### 2. 🌐 Render Cloud Web Service Deployment
-This bot includes a built-in HTTP health-check server listening on port `PORT` (`8080`) specifically designed for **Render Web Services**:
+### 2. 🌐 Render Cloud Web Service Deployment (Live Deployed)
+This bot is **deployed live on Render** and includes a built-in HTTP health-check server listening on port `PORT` (`8080`) specifically designed for **Render Web Services**:
 
 1. Create a new **Web Service** on [Render.com](https://render.com).
 2. Connect your GitHub repository `Anbu2005-svg/Nebula_SuperMart_Agent`.
@@ -102,7 +73,7 @@ This bot includes a built-in HTTP health-check server listening on port `PORT` (
    * `DATABASE_URL`: Cloud PostgreSQL Connection String (Supabase/Neon/Render)
    * `LLM_API_KEY_1`: Your Ollama Cloud / OpenAI API key
    * `PORT`: `8080`
-5. Render will automatically build the service, bind to port `8080`, and set status to **Live**!
+5. Render automatically builds the service, binds to port `8080`, and runs **Live** 24/7!
 
 ---
 
@@ -145,3 +116,33 @@ pytest tests/ -v
 ```
 
 Tests cover end-to-end multi-item billing, oversell protection, ReportLab PDF generation, Matplotlib PPTX chart rendering, 5-cashier concurrent PostgreSQL write locking, Telegram update idempotency, and audit event logs.
+
+---
+
+## ✨ Unique Features & Key Highlights
+
+### 1. 🔐 Multi-Tenant Shop Owner Authentication (Login & Signup)
+* Supports full multi-tenant isolation where each shop owner operates securely under their own shop identity.
+* **New Shop Signup**: Allows new shop owners to register their store credentials (`shop_name`, `shop_address`, `shop_gstin`, password) directly via Telegram contact sharing or interactive prompts.
+* **Existing User Login**: Returning shop owners log in instantly with their credentials. Session state persists across chats and automatically expires after 24 hours of inactivity.
+* **Preserves Data Safety**: Multi-tenant database schema ensures inventory, bills, and Khata ledgers remain 100% isolated per shop session.
+
+### 2. 🌐 2-Step Verified Government GST Slab Rate Updates
+* **Government GST Update Handling**: When a shop owner mentions a GST slab revision (e.g. *"Government updated GST on Sugar to 5%"* or *"Verify new GST rate for Rice"*), the agent does NOT modify catalog data blindly.
+* **2-Step Verification Flow**:
+  1. The agent inspects current catalog rates using search tools.
+  2. The agent presents an explicit confirmation card to the shop owner:
+     ```text
+     ⚠️ CONFIRM GST SLAB UPDATE:
+     • Target: Refined White Sugar 1kg [SKU-SUGAR-1K]
+     • Current GST: 0% ➔ Proposed New GST: 5%
+     Please reply 'YES' to confirm and update catalog.
+     ```
+  3. Only after the user confirms with `YES` / `confirm` / `ok`, the agent invokes `update_gst_slab` to commit changes to PostgreSQL.
+
+### 3. 🛡️ Intelligent Token-Cost & Context Optimization Guardrails
+To reduce LLM token consumption, eliminate API rate limits, and cut operational LLM costs by **60% to 70%**:
+* **Smart Context Compression**: Automatically summarizes older chat history turns when conversation length exceeds 10 turns. Keeps system prompt & recent turns intact while compressing earlier turns into a compact highlight block, preventing token explosion.
+* **Ultrafast Single-Turn Execution Guard**: Executes complex multi-item billing (`quick_create_bill`) or stock receipts in 1 single LLM turn rather than forcing multi-turn search/query roundtrips.
+* **Dual API Key Failover & Round-Robin Load Balancing**: Automatically failovers across `LLM_API_KEY_1`, `LLM_API_KEY_2`, etc. when hitting 429 rate limit errors, distributing concurrent shop traffic seamlessly.
+* **Sticky Default Payment Mode Persistence**: Remembers the shop owner's preferred payment mode (e.g., `UPI`) in PostgreSQL so subsequent bills automatically finalize via `UPI` without requiring the user to re-type the payment mode every time.
