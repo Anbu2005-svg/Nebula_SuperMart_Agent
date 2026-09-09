@@ -566,7 +566,7 @@ def main():
                 port=port,
                 url_path="telegram",
                 webhook_url=webhook_url,
-                drop_pending_updates=True
+                drop_pending_updates=False
             )
         else:
             # Start health check server & self-pinger for polling mode
