@@ -58,9 +58,8 @@ else:
     logger.info(f"✅ Loaded {len(_API_KEYS)} API key(s) for LLM failover/load balancing.")
 
 # Track which key is currently active (index into _API_KEYS)
+# Always starts at 0 (KEY 1). Failover switches to next key on rate limit errors.
 _active_key_index = 0
-# Round-robin counter for distributing concurrent requests across keys
-_round_robin_index = 0
 
 def _build_client(api_key: str) -> OpenAI:
     """Build an OpenAI-compatible client pointing at the configured base URL."""
@@ -92,14 +91,11 @@ def failover_to_next_key() -> bool:
 
 def reset_key_rotation():
     """
-    At the start of each new request, pick the next key in round-robin order.
-    This distributes load across ALL available keys when multiple shops are active simultaneously.
-    e.g. Shop A request → key 1, Shop B request → key 2, Shop C request → key 3, Shop D → key 1...
+    At the start of each new user request, reset to KEY 1 (primary).
+    KEY 2 is only used as failover when KEY 1 returns a rate limit (429) error.
     """
-    global _active_key_index, _round_robin_index
-    if _API_KEYS:
-        _round_robin_index = (_round_robin_index + 1) % len(_API_KEYS)
-        _active_key_index = _round_robin_index
+    global _active_key_index
+    _active_key_index = 0  # Always start with LLM_API_KEY_1
 
 
 # System Prompt grounding instructions
