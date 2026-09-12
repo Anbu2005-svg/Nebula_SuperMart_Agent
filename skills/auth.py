@@ -2,8 +2,11 @@ import os
 import time
 import hmac
 import hashlib
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
 from db.models import get_db_connection, immediate_transaction
+
+IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 
 # In-memory tracking for failed login attempts to prevent brute-force attacks
 # {identifier: {"count": int, "locked_until": float}}
@@ -173,13 +176,64 @@ def login_shop(telegram_id: str, shop_name: str, password: str) -> Dict[str, Any
 SESSION_EXPIRY_HOURS = 24
 
 
-def cleanup_expired_sessions() -> int:
-    """Purge all user sessions older than 24 hours from PostgreSQL."""
+def get_latest_morning_cutoff_ist(now_dt: Optional[datetime] = None, reset_hour: int = 4, reset_minute: int = 30) -> datetime:
+    """
+    Returns the datetime of the latest morning reset cutoff in Indian Standard Time (IST).
+    Defaults to 4:30 AM IST (between 4:00 AM and 5:00 AM IST).
+    """
+    if now_dt is None:
+        now_dt = datetime.now(IST)
+    elif now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc).astimezone(IST)
+    else:
+        now_dt = now_dt.astimezone(IST)
+
+    today_cutoff = now_dt.replace(hour=reset_hour, minute=reset_minute, second=0, microsecond=0)
+    if now_dt >= today_cutoff:
+        return today_cutoff
+    else:
+        return today_cutoff - timedelta(days=1)
+
+
+def logout_all_sessions() -> int:
+    """
+    Log out all active user sessions across all shops.
+    Invoked for the daily morning reset between 4:00 AM and 5:00 AM IST.
+    """
     conn = get_db_connection()
     try:
         with immediate_transaction(conn):
             cur = conn.cursor()
-            cur.execute("DELETE FROM user_sessions WHERE authenticated_at < (CURRENT_TIMESTAMP - INTERVAL '24 hours')")
+            cur.execute("DELETE FROM user_sessions")
+            deleted_count = cur.rowcount
+            cur.close()
+        return deleted_count
+    except Exception:
+        return 0
+    finally:
+        conn.close()
+
+
+def cleanup_expired_sessions() -> int:
+    """
+    Purge user sessions from PostgreSQL that are expired:
+    1. Authenticated prior to the most recent daily morning cutoff (4:30 AM IST).
+    2. Or older than 24 hours.
+    """
+    reset_hour = int(os.getenv("DAILY_LOGOUT_HOUR_IST", "4"))
+    reset_minute = int(os.getenv("DAILY_LOGOUT_MINUTE_IST", "30"))
+    cutoff = get_latest_morning_cutoff_ist(reset_hour=reset_hour, reset_minute=reset_minute)
+    cutoff_utc = cutoff.astimezone(timezone.utc)
+
+    conn = get_db_connection()
+    try:
+        with immediate_transaction(conn):
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM user_sessions
+                WHERE authenticated_at < %s
+                   OR authenticated_at < (CURRENT_TIMESTAMP - INTERVAL '24 hours')
+            """, (cutoff_utc,))
             deleted_count = cur.rowcount
             cur.close()
         return deleted_count

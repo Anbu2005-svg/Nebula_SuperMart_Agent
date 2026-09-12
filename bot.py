@@ -568,6 +568,42 @@ def start_keep_alive_pinger():
     print(f"🔄 Self-pinging keep-alive enabled for {url} (every 10 mins).")
 
 
+def start_daily_morning_logout_scheduler():
+    """
+    Background daemon thread that triggers an automatic logout of all accounts
+    every morning between 4:00 AM and 5:00 AM Indian Standard Time (IST).
+    Default reset time: 4:30 AM IST (configurable via DAILY_LOGOUT_HOUR_IST / DAILY_LOGOUT_MINUTE_IST).
+    """
+    import threading
+    import time
+    from datetime import datetime, timezone, timedelta
+    from skills.auth import logout_all_sessions
+
+    IST = timezone(timedelta(hours=5, minutes=30), name="IST")
+    reset_hour = int(os.getenv("DAILY_LOGOUT_HOUR_IST", "4"))
+    reset_minute = int(os.getenv("DAILY_LOGOUT_MINUTE_IST", "30"))
+
+    def scheduler_loop():
+        last_run_date = None
+        while True:
+            try:
+                now_ist = datetime.now(IST)
+                current_date = now_ist.date()
+                if now_ist.hour == reset_hour and now_ist.minute >= reset_minute and last_run_date != current_date:
+                    logger.info("🌅 Executing daily morning logout of all sessions (IST %02d:%02d)...", now_ist.hour, now_ist.minute)
+                    count = logout_all_sessions()
+                    USER_AUTH_STATE.clear()
+                    last_run_date = current_date
+                    logger.info("✅ Morning reset complete: %d active session(s) logged out for the new day.", count)
+            except Exception as e:
+                logger.error("Error in daily morning logout scheduler: %s", e)
+            time.sleep(30)
+
+    thread = threading.Thread(target=scheduler_loop, daemon=True)
+    thread.start()
+    print(f"🌅 Daily morning logout scheduler active (every morning at {reset_hour:02d}:{reset_minute:02d} AM IST).")
+
+
 def main():
     """Main application entry point."""
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -580,6 +616,9 @@ def main():
 
     # Start self-pinging keep-alive loop if RENDER_EXTERNAL_URL is configured
     start_keep_alive_pinger()
+
+    # Start daily morning logout scheduler (between 4:00 AM and 5:00 AM IST)
+    start_daily_morning_logout_scheduler()
 
     app = ApplicationBuilder().token(token).post_init(post_init).build()
 

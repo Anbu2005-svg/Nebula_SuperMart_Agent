@@ -1,8 +1,18 @@
 import pytest
 import os
 import uuid
+from datetime import datetime, timedelta
 from db.seed import seed_database
-from skills.auth import register_shop, login_shop, get_user_session, is_user_authenticated, logout_user_session
+from skills.auth import (
+    register_shop,
+    login_shop,
+    get_user_session,
+    is_user_authenticated,
+    logout_user_session,
+    logout_all_sessions,
+    get_latest_morning_cutoff_ist,
+    IST
+)
 
 TEST_DB = "test_auth.db"
 
@@ -108,4 +118,42 @@ def test_24h_session_expiration():
     session = get_user_session(user_id)
     assert session is None
     assert is_user_authenticated(user_id) is False
+
+
+def test_daily_morning_logout_cutoff_calculation():
+    # 1. When time is after 04:30 AM IST (e.g. 10:00 AM IST), cutoff is today at 04:30 AM IST
+    after_cutoff = datetime(2026, 9, 12, 10, 0, tzinfo=IST)
+    cutoff = get_latest_morning_cutoff_ist(after_cutoff, reset_hour=4, reset_minute=30)
+    assert cutoff == datetime(2026, 9, 12, 4, 30, tzinfo=IST)
+
+    # 2. When time is before 04:30 AM IST (e.g. 02:15 AM IST), cutoff was yesterday at 04:30 AM IST
+    before_cutoff = datetime(2026, 9, 12, 2, 15, tzinfo=IST)
+    cutoff_prev = get_latest_morning_cutoff_ist(before_cutoff, reset_hour=4, reset_minute=30)
+    assert cutoff_prev == datetime(2026, 9, 11, 4, 30, tzinfo=IST)
+
+
+def test_logout_all_sessions_purges_all_users():
+    run_id = uuid.uuid4().hex[:6]
+    u1 = f"user_all_1_{run_id}"
+    u2 = f"user_all_2_{run_id}"
+    s1 = f"Shop All 1 {run_id}"
+    s2 = f"Shop All 2 {run_id}"
+
+    register_shop(s1, "Pass12345!")
+    register_shop(s2, "Pass12345!")
+
+    login_shop(u1, s1, "Pass12345!")
+    login_shop(u2, s2, "Pass12345!")
+
+    assert is_user_authenticated(u1) is True
+    assert is_user_authenticated(u2) is True
+
+    # Morning reset triggered
+    deleted = logout_all_sessions()
+    assert deleted >= 2
+
+    # Both users are now logged out
+    assert is_user_authenticated(u1) is False
+    assert is_user_authenticated(u2) is False
+
 
