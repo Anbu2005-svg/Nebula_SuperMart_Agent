@@ -59,6 +59,17 @@ from skills.auth import (
 # User login/signup state machine: {telegram_id: {"step": "choice"|"signup_name"|"signup_pwd"|"signup_meta"|"login_name"|"login_pwd", "data": {}}}
 USER_AUTH_STATE: Dict[str, Dict[str, Any]] = {}
 
+def is_safe_generated_file(file_path: str) -> bool:
+    """Validate that the file exists and is strictly located inside the generated_docs directory to prevent path traversal."""
+    if not file_path or not isinstance(file_path, str):
+        return False
+    try:
+        safe_base = os.path.abspath("generated_docs")
+        target_path = os.path.abspath(file_path)
+        return os.path.commonpath([safe_base, target_path]) == safe_base and os.path.isfile(target_path)
+    except Exception:
+        return False
+
 def get_auth_choice_keyboard():
     """Returns New Shop (Sign Up) vs Existing Shop (Log In) inline choice keyboard buttons."""
     keyboard = [
@@ -150,7 +161,7 @@ async def invoice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     res = generate_invoice_pdf(bill_id)
     if res.get("status") == "success" and "file_path" in res:
         file_path = res["file_path"]
-        if os.path.exists(file_path):
+        if is_safe_generated_file(file_path):
             with open(file_path, "rb") as doc:
                 await update.message.reply_document(
                     document=doc,
@@ -173,7 +184,7 @@ async def analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     res = generate_analysis_deck(period)
     if res.get("status") == "success" and "file_path" in res:
         file_path = res["file_path"]
-        if os.path.exists(file_path):
+        if is_safe_generated_file(file_path):
             with open(file_path, "rb") as doc:
                 await update.message.reply_document(
                     document=doc,
@@ -221,6 +232,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             return
 
         elif state == "signup_pwd":
+            try:
+                await update.message.delete()
+            except Exception:
+                pass
             USER_AUTH_STATE[telegram_id]["data"]["password"] = user_text
             USER_AUTH_STATE[telegram_id]["step"] = "signup_meta"
             await update.message.reply_text(
@@ -267,6 +282,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             return
 
         elif state == "login_pwd":
+            try:
+                await update.message.delete()
+            except Exception:
+                pass
             shop_name = USER_AUTH_STATE[telegram_id]["data"]["shop_name"]
             password = user_text
             login_res = login_shop(telegram_id=telegram_id, shop_name=shop_name, password=password)
@@ -338,6 +357,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 owner_id=owner_id,
                 update_id=update_id
             )
+        except Exception as err:
+            logger.error(f"Error during agent turn for chat {chat_id}: {err}", exc_info=True)
+            reply_text = "⚠️ An unexpected error occurred while processing your request. Please try again in a moment."
+            generated_files = []
         finally:
             typing_task.cancel()
 
@@ -354,9 +377,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 except Exception:
                     await update.message.reply_text(reply_text)
 
-        # Send generated document files if any
+        # Send generated document files safely (confined strictly to generated_docs/)
         for file_path in generated_files:
-            if os.path.exists(file_path):
+            if is_safe_generated_file(file_path):
                 with open(file_path, "rb") as doc:
                     await update.message.reply_document(
                         document=doc,
@@ -383,9 +406,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline button callbacks for populating default problem statement stocks."""
+    """Handle inline button callbacks for populating default problem statement stocks with auth check."""
     query = update.callback_query
     await query.answer()
+
+    telegram_id = str(update.effective_user.id) if update.effective_user else "default"
+    if not is_user_authenticated(telegram_id):
+        await query.edit_message_text("🔐 Authentication required. Please send /start to log in first.")
+        return
 
     if query.data == "seed_default_stocks":
         res = populate_default_inventory()
@@ -475,10 +503,31 @@ def start_health_check_server():
 
     class HealthCheckHandler(BaseHTTPRequestHandler):
         def do_GET(self):
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
+            if self.path in ("/", "/health", "/healthz"):
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain; charset=utf-8")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("X-Frame-Options", "DENY")
+                self.end_headers()
+                self.wfile.write(b"Bot is healthy!")
+            else:
+                self.send_response(404)
+                self.send_header("Content-type", "text/plain; charset=utf-8")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(b"Not Found")
+
+        def do_POST(self):
+            self.send_response(405)
+            self.send_header("Content-type", "text/plain; charset=utf-8")
             self.end_headers()
-            self.wfile.write(b"Bot is healthy!")
+            self.wfile.write(b"Method Not Allowed")
+
+        def do_PUT(self):
+            self.do_POST()
+
+        def do_DELETE(self):
+            self.do_POST()
 
         def log_message(self, format, *args):
             return  # Suppress HTTP server access logs
@@ -559,13 +608,16 @@ def main():
         if use_webhook and render_url:
             port = int(os.getenv("PORT", "8080"))
             webhook_url = f"{render_url.rstrip('/')}/telegram"
-            print(f"🌐 Starting Telegram Webhook mode on port {port} at {webhook_url}...")
+            # Secure webhook token to verify updates genuinely originate from Telegram API
+            webhook_secret = os.getenv("WEBHOOK_SECRET_TOKEN") or hashlib.sha256(f"secret_{token}".encode()).hexdigest()[:32]
+            print(f"🌐 Starting Telegram Webhook mode on port {port} at {webhook_url} (secret_token verification enabled)...")
             print(f"⚡ Render will sleep when idle and automatically wake up whenever a Telegram user sends a message!")
             app.run_webhook(
                 listen="0.0.0.0",
                 port=port,
                 url_path="telegram",
                 webhook_url=webhook_url,
+                secret_token=webhook_secret,
                 drop_pending_updates=False
             )
         else:

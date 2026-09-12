@@ -1,3 +1,4 @@
+import math
 import uuid
 from typing import Dict, Any, List, Optional
 from db.models import get_db_connection, immediate_transaction
@@ -23,7 +24,7 @@ def get_stock(query: str) -> Dict[str, Any]:
                 matches = [{"sku_id": p["sku_id"], "name": p["name"], "quantity": p["quantity"], "mrp": p["mrp"]} for p in products]
                 return {
                     "status": "multiple_matches",
-                    "message": f"Found multiple products matching '{query}'. Please specify SKU or exact name.",
+                    "message": f"Found multiple products matching '{query}'. Please specify which brand/variety:",
                     "matches": matches
                 }
             product = products[0]
@@ -36,7 +37,7 @@ def get_stock(query: str) -> Dict[str, Any]:
                 "name": product["name"],
                 "category": product["category"],
                 "unit": product["unit"],
-                "is_loose": bool(product["is_loose"]),
+                "is_loose": product["is_loose"],
                 "cost_price": product["cost_price"],
                 "mrp": product["mrp"],
                 "gst_slab": product["gst_slab"],
@@ -52,8 +53,12 @@ def get_stock(query: str) -> Dict[str, Any]:
 
 def receive_stock(sku_id: str, qty: float, cost_price: Optional[float] = None, mrp: Optional[float] = None) -> Dict[str, Any]:
     """Receive inventory stock (increases stock quantity). Updates cost_price and optional mrp."""
-    if qty <= 0:
+    if not isinstance(qty, (int, float)) or not math.isfinite(qty) or qty <= 0:
         return {"status": "error", "message": "Received quantity must be positive"}
+    if cost_price is not None and (not isinstance(cost_price, (int, float)) or not math.isfinite(cost_price) or cost_price < 0):
+        return {"status": "error", "message": "Cost price must be a non-negative finite number"}
+    if mrp is not None and (not isinstance(mrp, (int, float)) or not math.isfinite(mrp) or mrp <= 0):
+        return {"status": "error", "message": "MRP must be a positive finite number"}
 
     conn = get_db_connection()
     try:
@@ -115,8 +120,16 @@ def add_product(
     sku_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Add a new product SKU to the catalog."""
+    if not isinstance(cost_price, (int, float)) or not math.isfinite(cost_price) or cost_price < 0:
+        return {"status": "error", "message": "Cost price must be a non-negative finite number"}
+    if not isinstance(mrp, (int, float)) or not math.isfinite(mrp) or mrp <= 0:
+        return {"status": "error", "message": "MRP must be a positive finite number"}
     if cost_price > mrp:
         return {"status": "error", "message": f"Cost price ({cost_price}) cannot exceed MRP ({mrp})"}
+    if not isinstance(quantity, (int, float)) or not math.isfinite(quantity) or quantity < 0:
+        return {"status": "error", "message": "Quantity must be a non-negative finite number"}
+    if not isinstance(reorder_level, (int, float)) or not math.isfinite(reorder_level) or reorder_level < 0:
+        return {"status": "error", "message": "Reorder level must be a non-negative finite number"}
     if gst_slab not in [0, 5, 12, 18]:
         return {"status": "error", "message": "GST slab must be one of: 0, 5, 12, 18"}
 
@@ -316,6 +329,9 @@ def update_gst_slab(
             if hsn_code:
                 query_conditions.append("hsn_code = %s")
                 params.append(hsn_code.strip())
+
+            if not query_conditions:
+                return {"status": "error", "message": "Specify at least one target: sku_or_name, category, or hsn_code"}
 
             where_clause = " AND ".join(query_conditions)
 

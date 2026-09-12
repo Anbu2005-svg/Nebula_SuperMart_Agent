@@ -1,3 +1,4 @@
+import math
 import uuid
 from typing import Dict, Any, List, Optional
 from db.models import get_db_connection, immediate_transaction
@@ -72,14 +73,14 @@ def _resolve_sku(conn, sku_or_name: str) -> Dict[str, Any]:
         cur.close()
         return {"status": "single", "product": product}
 
-    # 2. Search by exact product name (case-insensitive)
+    # 2. Search by exact name (case-insensitive)
     cur.execute("SELECT * FROM products WHERE name ILIKE %s", (sku_or_name.strip(),))
-    exact_matches = cur.fetchall()
-    if len(exact_matches) == 1:
+    product = cur.fetchone()
+    if product:
         cur.close()
-        return {"status": "single", "product": exact_matches[0]}
+        return {"status": "single", "product": product}
 
-    # 3. Fuzzy search by name or category
+    # 3. Search by substring/prefix
     cur.execute("SELECT * FROM products WHERE name ILIKE %s ORDER BY name ASC", (f"%{sku_or_name.strip()}%",))
     matches = cur.fetchall()
     cur.close()
@@ -94,8 +95,8 @@ def _resolve_sku(conn, sku_or_name: str) -> Dict[str, Any]:
 
 def add_item_to_bill(bill_id: str, sku_or_name: str, qty: float) -> Dict[str, Any]:
     """Add an item to a draft bill. Performs stock warning check and cost price guard check."""
-    if qty <= 0:
-        return {"status": "error", "message": "Item quantity must be greater than zero"}
+    if not isinstance(qty, (int, float)) or not math.isfinite(qty) or qty <= 0:
+        return {"status": "error", "message": "Item quantity must be a positive finite number"}
 
     conn = get_db_connection()
     try:
@@ -216,6 +217,8 @@ def remove_item_from_bill(bill_id: str, sku_or_name: str) -> Dict[str, Any]:
 
 def edit_item_qty(bill_id: str, sku_or_name: str, new_qty: float) -> Dict[str, Any]:
     """Edit the quantity of an existing line item in a draft bill."""
+    if not isinstance(new_qty, (int, float)) or not math.isfinite(new_qty):
+        return {"status": "error", "message": "New quantity must be a valid finite number"}
     if new_qty <= 0:
         return remove_item_from_bill(bill_id, sku_or_name)
 
@@ -565,8 +568,15 @@ def quick_create_bill(
     # 2. Add all items
     for item in items:
         name = item.get("name") or item.get("sku_or_name") or item.get("sku")
-        qty = float(item.get("qty", 1))
         if not name:
+            continue
+        try:
+            qty = float(item.get("qty", 1))
+            if not math.isfinite(qty) or qty <= 0:
+                warnings.append(f"Invalid quantity for '{name}': must be a positive finite number")
+                continue
+        except (ValueError, TypeError):
+            warnings.append(f"Invalid quantity format for '{name}'")
             continue
         res = add_item_to_bill(bill_id=bill_id, sku_or_name=name, qty=qty)
         if res.get("status") == "success":

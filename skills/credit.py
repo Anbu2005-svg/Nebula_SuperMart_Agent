@@ -1,3 +1,4 @@
+import math
 from typing import Dict, Any, List, Optional
 from db.models import get_db_connection, immediate_transaction
 from skills.audit import _log_event
@@ -13,8 +14,8 @@ def _get_customer_by_name(conn, name: str) -> Optional[Any]:
 
 def charge_khata(customer_name: str, amount: float, bill_id: Optional[str] = None) -> Dict[str, Any]:
     """Add a credit charge to a customer's khata ledger."""
-    if amount <= 0:
-        return {"status": "error", "message": "Charge amount must be positive."}
+    if not isinstance(amount, (int, float)) or not math.isfinite(amount) or amount <= 0:
+        return {"status": "error", "message": "Charge amount must be a positive finite number."}
 
     conn = get_db_connection()
     try:
@@ -61,8 +62,8 @@ def charge_khata(customer_name: str, amount: float, bill_id: Optional[str] = Non
 
 def record_payment(customer_name: str, amount: float) -> Dict[str, Any]:
     """Record a credit repayment from a customer to reduce their khata balance."""
-    if amount <= 0:
-        return {"status": "error", "message": "Payment amount must be positive."}
+    if not isinstance(amount, (int, float)) or not math.isfinite(amount) or amount <= 0:
+        return {"status": "error", "message": "Payment amount must be a positive finite number."}
 
     conn = get_db_connection()
     try:

@@ -8,7 +8,15 @@ def daily_summary(date_str: Optional[str] = None) -> Dict[str, Any]:
     Generate daily sales summary report for a given date (YYYY-MM-DD).
     Defaults to current date if omitted.
     """
-    target_date = date_str if date_str else date.today().isoformat()
+    if date_str:
+        try:
+            from datetime import datetime
+            parsed_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+            target_date = parsed_date.isoformat()
+        except ValueError:
+            return {"status": "error", "message": f"Invalid date format '{date_str}'. Expected format is YYYY-MM-DD (e.g. 2026-09-12)."}
+    else:
+        target_date = date.today().isoformat()
 
     conn = get_db_connection()
     try:
