@@ -553,7 +553,7 @@ def main():
 
     print(f"🤖 Supermarket Ops Agent Telegram Bot is running...")
     use_webhook = os.getenv("USE_WEBHOOK", "false").lower().strip() in ("true", "1", "yes")
-    render_url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL") or "https://nebula-supermart-agent.onrender.com"
+    render_url = os.getenv("RENDER_EXTERNAL_URL") or os.getenv("WEBHOOK_URL") or "https://supermart-agent.onrender.com"
 
     try:
         if use_webhook and render_url:

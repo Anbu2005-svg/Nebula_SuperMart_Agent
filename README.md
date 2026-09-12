@@ -1,4 +1,4 @@
-# Nebula SuperMart AI Ops Agent 🛒🤖
+# SuperMart AI Ops Agent 🛒🤖
 
 > **Supermarket Operations AI Agent for Telegram**  
 > An intelligent, autonomous Telegram AI Operations Agent for Indian Kirana Supermarkets built with **100% Free & Open-Source Tools**, PostgreSQL cloud database, dual LLM key failover, and ReportLab / Matplotlib document generators.
@@ -6,8 +6,8 @@
 ---
 
 ## 📌 Project & Repository Details
-* **GitHub Repository:** [https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent](https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent)
-* **Telegram Bot:** [@Nebula_superMart_bot](https://t.me/Nebula_superMart_bot)
+* **GitHub Repository:** [https://github.com/Anbu2005-svg/SuperMart_Agent](https://github.com/Anbu2005-svg/SuperMart_Agent)
+* **Telegram Bot:** [@SuperMart_Ops_Agent_bot](https://t.me/SuperMart_Ops_Agent_bot)
 * **Live Deployment:** **Deployed Live on Render** 🚀 ([Render Web Service](https://render.com))
 * **Project Demo Video:** [Watch Full Demo Video on Google Drive 🎥](https://drive.google.com/file/d/1pdQ5xrjZ3hvjJYbu41JMtpRS_JPcJHjR/view?usp=sharing)
 * **Author / Contributor:** `Anbu2005-svg`
@@ -19,7 +19,7 @@
 
 > 🎬 **Watch the Complete Project Demonstration:**  
 > Click here to watch the full operational walkthrough video on Google Drive:  
-> 👉 [**Nebula SuperMart AI Ops Agent - Video Demo**](https://drive.google.com/file/d/1pdQ5xrjZ3hvjJYbu41JMtpRS_JPcJHjR/view?usp=sharing)
+> 👉 [**SuperMart AI Ops Agent - Video Demo**](https://drive.google.com/file/d/1pdQ5xrjZ3hvjJYbu41JMtpRS_JPcJHjR/view?usp=sharing)
 
 ---
 
@@ -117,8 +117,8 @@ Business logic is decoupled into domain-specific modules under `/skills`:
 ### 1. Local Setup
 ```bash
 # Clone repository
-git clone https://github.com/Anbu2005-svg/Nebula_SuperMart_Agent.git
-cd Nebula_SuperMart_Agent
+git clone https://github.com/Anbu2005-svg/SuperMart_Agent.git
+cd SuperMart_Agent
 
 # Create and activate virtual environment
 python -m venv venv
@@ -141,7 +141,7 @@ python bot.py
 This bot is **deployed live on Render** and includes a built-in HTTP health-check server listening on port `PORT` (`8080`) specifically designed for **Render Web Services**:
 
 1. Create a new **Web Service** on [Render.com](https://render.com).
-2. Connect your GitHub repository `Anbu2005-svg/Nebula_SuperMart_Agent`.
+2. Connect your GitHub repository `Anbu2005-svg/SuperMart_Agent`.
 3. Set the following build and start configurations:
    * **Runtime**: Python 3
    * **Build Command**: `pip install -r requirements.txt`

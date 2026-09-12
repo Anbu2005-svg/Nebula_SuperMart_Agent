@@ -1,5 +1,5 @@
 -- PostgreSQL Schema Migration for Prisma / Render / Supabase / Neon
--- Project: Nebula SuperMart AI Ops Agent
+-- Project: SuperMart AI Ops Agent
 
 CREATE TABLE IF NOT EXISTS products (
     sku_id VARCHAR(255) PRIMARY KEY,

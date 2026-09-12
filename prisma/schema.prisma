@@ -1,5 +1,5 @@
 // Prisma Schema for PostgreSQL Deployment
-// Project: Nebula SuperMart AI Ops Agent
+// Project: SuperMart AI Ops Agent
 
 datasource db {
   provider = "postgresql"

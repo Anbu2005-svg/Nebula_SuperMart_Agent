@@ -5,6 +5,9 @@ import psycopg2.extras
 from contextlib import contextmanager
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DEFAULT_DB_PATH = os.getenv("DB_PATH", "supermarket.db")
 
